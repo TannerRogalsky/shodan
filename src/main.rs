@@ -8,7 +8,7 @@ use serenity::prelude::*;
 mod grim;
 
 #[group]
-#[commands(ping, new, join, end)]
+#[commands(ping, new, join, start, draw, end)]
 struct General;
 
 struct Handler;
@@ -117,6 +117,74 @@ async fn join(ctx: &Context, msg: &Message) -> CommandResult {
         } else {
             let content = format!("No game waiting for players!");
             msg.reply(ctx, content).await?;
+        }
+    }
+
+    Ok(())
+}
+
+#[command]
+async fn start(ctx: &Context, msg: &Message) -> CommandResult {
+    let game = {
+        let data_write = ctx.data.write().await;
+        let games_builders_lock = data_write
+            .get::<GrimBuilders>()
+            .expect("Expected GrimBuilders in TypeMap.")
+            .clone();
+        let mut builders = games_builders_lock.write().await;
+
+        if let Some(builder) = builders.get(&msg.channel_id) {
+            if msg.author == builder.creator {
+                let builder = builders.remove(&msg.channel_id).unwrap();
+                Some(builder.ready())
+            } else {
+                None
+            }
+        } else {
+            let content = format!("No game to start!");
+            msg.reply(ctx, content).await?;
+            None
+        }
+    };
+
+    if let Some(game) = game {
+        let data_write = ctx.data.write().await;
+        let games_lock = data_write
+            .get::<GrimGames>()
+            .expect("Expected GrimGames in TypeMap.")
+            .clone();
+        let mut games = games_lock.write().await;
+
+        games.insert(msg.channel_id, game);
+        let content = format!("Game started!");
+        msg.reply(ctx, content).await?;
+    }
+
+    Ok(())
+}
+
+#[command]
+async fn draw(ctx: &Context, msg: &Message) -> CommandResult {
+    let data_write = ctx.data.write().await;
+    let games_lock = data_write
+        .get::<GrimGames>()
+        .expect("Expected GrimGames in TypeMap.")
+        .clone();
+    let mut games = games_lock.write().await;
+
+    if let Some(game) = games.get_mut(&msg.channel_id) {
+        if game.is_player(&msg.author) {
+            if let Some(card) = game.draw() {
+                let content = format!(
+                    "Drew {}! {} cards remaining!",
+                    card.description(),
+                    game.deck.len()
+                );
+                msg.reply(ctx, content).await?;
+            } else {
+                let content = format!("Deck is out of cards!");
+                msg.reply(ctx, content).await?;
+            }
         }
     }
 
