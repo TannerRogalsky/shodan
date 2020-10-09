@@ -5,17 +5,25 @@ use serenity::framework::standard::{
 use serenity::model::prelude::*;
 use serenity::prelude::*;
 use std::sync::Arc;
+use structopt::StructOpt;
 
 mod grim;
 
 #[group]
-#[commands(ping, new, join, start, draw, die, cards, end)]
+#[commands(grim)]
 struct General;
 
 struct Handler;
 
 #[serenity::async_trait]
-impl EventHandler for Handler {}
+impl EventHandler for Handler {
+    /// Dispatched upon startup.
+    ///
+    /// Provides data about the bot and the guilds it's in.
+    async fn ready(&self, _ctx: Context, _data_about_bot: Ready) {
+        println!("BOT READY");
+    }
+}
 
 #[tokio::main]
 async fn main() {
@@ -83,7 +91,6 @@ where
     )
 }
 
-#[command]
 async fn new(ctx: &Context, msg: &Message) -> CommandResult {
     {
         let games_lock = get_read_data::<GrimGames, _>(ctx).await;
@@ -113,7 +120,6 @@ async fn new(ctx: &Context, msg: &Message) -> CommandResult {
     Ok(())
 }
 
-#[command]
 async fn join(ctx: &Context, msg: &Message) -> CommandResult {
     {
         let games_builders_lock = get_write_data::<GrimBuilders, _>(ctx).await;
@@ -194,7 +200,6 @@ async fn draw(ctx: &Context, msg: &Message) -> CommandResult {
     Ok(())
 }
 
-#[command]
 async fn die(ctx: &Context, msg: &Message) -> CommandResult {
     let games_lock = get_write_data::<GrimGames, _>(ctx).await;
     let mut games = games_lock.write().await;
@@ -211,7 +216,6 @@ async fn die(ctx: &Context, msg: &Message) -> CommandResult {
     Ok(())
 }
 
-#[command]
 async fn cards(ctx: &Context, msg: &Message) -> CommandResult {
     let games_lock = get_read_data::<GrimGames, _>(ctx).await;
     let games = games_lock.read().await;
@@ -224,7 +228,6 @@ async fn cards(ctx: &Context, msg: &Message) -> CommandResult {
     Ok(())
 }
 
-#[command]
 async fn end(ctx: &Context, msg: &Message) -> CommandResult {
     {
         let games_lock = get_write_data::<GrimGames, _>(ctx).await;
@@ -255,13 +258,42 @@ async fn end(ctx: &Context, msg: &Message) -> CommandResult {
     Ok(())
 }
 
+#[derive(Debug, StructOpt)]
+#[structopt(name = "Grim", about = "Grim game helper.")]
+enum GrimCmd {
+    New,
+    Join,
+    Die,
+    Cards,
+    End,
+}
+
+impl GrimCmd {
+    pub async fn execute(&self, ctx: &Context, msg: &Message) -> CommandResult {
+        match self {
+            GrimCmd::New => new(ctx, msg).await,
+            GrimCmd::Join => join(ctx, msg).await,
+            GrimCmd::End => end(ctx, msg).await,
+            GrimCmd::Die => die(ctx, msg).await,
+            GrimCmd::Cards => cards(ctx, msg).await,
+        }
+    }
+}
+
 #[command]
-async fn ping(ctx: &Context, msg: &Message) -> CommandResult {
-    msg.reply(ctx, "Pong!").await?;
-
-    tokio::time::delay_for(tokio::time::Duration::from_secs(2)).await;
-
-    msg.reply(ctx, "Pong2!").await?;
+async fn grim(ctx: &Context, msg: &Message) -> CommandResult {
+    let args = msg
+        .content
+        .split_ascii_whitespace()
+        .map(Into::<std::ffi::OsString>::into);
+    match GrimCmd::from_iter_safe(args) {
+        Ok(cmd) => {
+            cmd.execute(ctx, msg).await?;
+        }
+        Err(e) => {
+            msg.reply(ctx, e.message).await?;
+        }
+    }
 
     Ok(())
 }
