@@ -4,11 +4,12 @@ use serenity::framework::standard::{
 };
 use serenity::model::prelude::*;
 use serenity::prelude::*;
+use std::sync::Arc;
 
 mod grim;
 
 #[group]
-#[commands(ping, new, join, start, draw, end)]
+#[commands(ping, new, join, start, draw, die, cards, end)]
 struct General;
 
 struct Handler;
@@ -48,22 +49,44 @@ async fn main() {
 
 struct GrimGames;
 impl TypeMapKey for GrimGames {
-    type Value = std::sync::Arc<RwLock<std::collections::HashMap<ChannelId, grim::Grim>>>;
+    type Value = Arc<RwLock<std::collections::HashMap<ChannelId, grim::Game>>>;
 }
 
 struct GrimBuilders;
 impl TypeMapKey for GrimBuilders {
-    type Value = std::sync::Arc<RwLock<std::collections::HashMap<ChannelId, grim::Builder>>>;
+    type Value = Arc<RwLock<std::collections::HashMap<ChannelId, grim::Builder>>>;
+}
+
+async fn get_write_data<T, U>(ctx: &Context) -> <T as TypeMapKey>::Value
+where
+    T: TypeMapKey<Value = Arc<RwLock<U>>>,
+    U: Send + Sync,
+{
+    let data_write = ctx.data.write().await;
+    Arc::clone(
+        data_write
+            .get::<T>()
+            .expect("Couldn't find data in context."),
+    )
+}
+
+async fn get_read_data<T, U>(ctx: &Context) -> <T as TypeMapKey>::Value
+where
+    T: TypeMapKey<Value = Arc<RwLock<U>>>,
+    U: Send + Sync,
+{
+    let data_read = ctx.data.read().await;
+    Arc::clone(
+        data_read
+            .get::<T>()
+            .expect("Couldn't find data in context."),
+    )
 }
 
 #[command]
 async fn new(ctx: &Context, msg: &Message) -> CommandResult {
     {
-        let data_read = ctx.data.read().await;
-        let games_lock = data_read
-            .get::<GrimGames>()
-            .expect("Expected GrimGames in TypeMap.")
-            .clone();
+        let games_lock = get_read_data::<GrimGames, _>(ctx).await;
         let games = games_lock.read().await;
 
         if let Some(game) = games.get(&msg.channel_id) {
@@ -74,11 +97,7 @@ async fn new(ctx: &Context, msg: &Message) -> CommandResult {
     }
 
     {
-        let data_write = ctx.data.write().await;
-        let games_builders_lock = data_write
-            .get::<GrimBuilders>()
-            .expect("Expected GrimBuilders in TypeMap.")
-            .clone();
+        let games_builders_lock = get_write_data::<GrimBuilders, _>(ctx).await;
         let mut builders = games_builders_lock.write().await;
 
         if let Some(builder) = builders.get(&msg.channel_id) {
@@ -97,11 +116,7 @@ async fn new(ctx: &Context, msg: &Message) -> CommandResult {
 #[command]
 async fn join(ctx: &Context, msg: &Message) -> CommandResult {
     {
-        let data_write = ctx.data.write().await;
-        let games_builders_lock = data_write
-            .get::<GrimBuilders>()
-            .expect("Expected GrimBuilders in TypeMap.")
-            .clone();
+        let games_builders_lock = get_write_data::<GrimBuilders, _>(ctx).await;
         let mut builders = games_builders_lock.write().await;
 
         if let Some(builder) = builders.get_mut(&msg.channel_id) {
@@ -115,7 +130,7 @@ async fn join(ctx: &Context, msg: &Message) -> CommandResult {
             let content = format!("Added! Current players: {}.", players);
             msg.reply(ctx, content).await?;
         } else {
-            let content = format!("No game waiting for players!");
+            let content = format!("No game waiting for players.");
             msg.reply(ctx, content).await?;
         }
     }
@@ -126,11 +141,7 @@ async fn join(ctx: &Context, msg: &Message) -> CommandResult {
 #[command]
 async fn start(ctx: &Context, msg: &Message) -> CommandResult {
     let game = {
-        let data_write = ctx.data.write().await;
-        let games_builders_lock = data_write
-            .get::<GrimBuilders>()
-            .expect("Expected GrimBuilders in TypeMap.")
-            .clone();
+        let games_builders_lock = get_write_data::<GrimBuilders, _>(ctx).await;
         let mut builders = games_builders_lock.write().await;
 
         if let Some(builder) = builders.get(&msg.channel_id) {
@@ -148,11 +159,7 @@ async fn start(ctx: &Context, msg: &Message) -> CommandResult {
     };
 
     if let Some(game) = game {
-        let data_write = ctx.data.write().await;
-        let games_lock = data_write
-            .get::<GrimGames>()
-            .expect("Expected GrimGames in TypeMap.")
-            .clone();
+        let games_lock = get_write_data::<GrimGames, _>(ctx).await;
         let mut games = games_lock.write().await;
 
         games.insert(msg.channel_id, game);
@@ -165,15 +172,11 @@ async fn start(ctx: &Context, msg: &Message) -> CommandResult {
 
 #[command]
 async fn draw(ctx: &Context, msg: &Message) -> CommandResult {
-    let data_write = ctx.data.write().await;
-    let games_lock = data_write
-        .get::<GrimGames>()
-        .expect("Expected GrimGames in TypeMap.")
-        .clone();
+    let games_lock = get_write_data::<GrimGames, _>(ctx).await;
     let mut games = games_lock.write().await;
 
     if let Some(game) = games.get_mut(&msg.channel_id) {
-        if game.is_player(&msg.author) {
+        if game.player_position(&msg.author).is_some() {
             if let Some(card) = game.draw() {
                 let content = format!(
                     "Drew {}! {} cards remaining!",
@@ -192,13 +195,39 @@ async fn draw(ctx: &Context, msg: &Message) -> CommandResult {
 }
 
 #[command]
+async fn die(ctx: &Context, msg: &Message) -> CommandResult {
+    let games_lock = get_write_data::<GrimGames, _>(ctx).await;
+    let mut games = games_lock.write().await;
+
+    if let Some(game) = games.get_mut(&msg.channel_id) {
+        if let Some(index) = game.player_position(&msg.author) {
+            let player = game.players.remove(index);
+            game.reset();
+            let content = format!("{} removed from game.", player.user.name);
+            msg.reply(ctx, content).await?;
+        }
+    }
+
+    Ok(())
+}
+
+#[command]
+async fn cards(ctx: &Context, msg: &Message) -> CommandResult {
+    let games_lock = get_read_data::<GrimGames, _>(ctx).await;
+    let games = games_lock.read().await;
+
+    if let Some(game) = games.get(&msg.channel_id) {
+        let content = format!("{} cards remaing in deck.", game.deck.len());
+        msg.reply(ctx, content).await?;
+    }
+
+    Ok(())
+}
+
+#[command]
 async fn end(ctx: &Context, msg: &Message) -> CommandResult {
     {
-        let data_write = ctx.data.write().await;
-        let games_lock = data_write
-            .get::<GrimGames>()
-            .expect("Expected GrimGames in TypeMap.")
-            .clone();
+        let games_lock = get_write_data::<GrimGames, _>(ctx).await;
         let mut games = games_lock.write().await;
 
         if let Some(game) = games.get(&msg.channel_id) {
@@ -211,11 +240,7 @@ async fn end(ctx: &Context, msg: &Message) -> CommandResult {
     }
 
     {
-        let data_write = ctx.data.write().await;
-        let games_builders_lock = data_write
-            .get::<GrimBuilders>()
-            .expect("Expected GrimBuilders in TypeMap.")
-            .clone();
+        let games_builders_lock = get_write_data::<GrimBuilders, _>(ctx).await;
         let mut builders = games_builders_lock.write().await;
 
         if let Some(builder) = builders.get(&msg.channel_id) {

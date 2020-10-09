@@ -1,7 +1,7 @@
 use serenity::model::user::User;
 
 pub struct Player {
-    inner: User,
+    pub user: User,
 }
 
 pub enum CardType {
@@ -52,7 +52,7 @@ impl Deck {
     }
 }
 
-pub struct Grim {
+pub struct Game {
     pub admin: User,
     pub players: Vec<Player>,
     pub deck: Deck,
@@ -60,7 +60,7 @@ pub struct Grim {
     rng: rand::rngs::StdRng,
 }
 
-impl Grim {
+impl Game {
     pub fn new(admin: User, players: Vec<User>) -> Self {
         let mut rng = rand::SeedableRng::from_entropy();
         let mut deck = Deck::new(players.len());
@@ -68,15 +68,15 @@ impl Grim {
 
         Self {
             admin,
-            players: players.into_iter().map(|p| Player { inner: p }).collect(),
+            players: players.into_iter().map(|p| Player { user: p }).collect(),
             deck,
             discard: vec![],
             rng,
         }
     }
 
-    pub fn is_player(&self, user: &User) -> bool {
-        self.players.iter().find(|p| p.inner.id == user.id).is_some()
+    pub fn player_position(&self, user: &User) -> Option<usize> {
+        self.players.iter().position(|p| p.user.id == user.id)
     }
 
     pub fn draw(&mut self) -> Option<CardType> {
@@ -91,7 +91,6 @@ impl Grim {
 
 pub struct Builder {
     pub creator: User,
-    pub max_players: Option<usize>,
     players: Vec<User>,
 }
 
@@ -100,25 +99,10 @@ impl Builder {
         Self {
             players: vec![creator.clone()],
             creator,
-            max_players: None,
-        }
-    }
-
-    pub fn with_max_players(creator: User, max_players: usize) -> Self {
-        Self {
-            players: vec![creator.clone()],
-            creator,
-            max_players: Some(max_players),
         }
     }
 
     pub fn add_player(&mut self, user: &User) {
-        if let Some(max) = self.max_players {
-            if max == self.players.len() {
-                return; // REACHED MAX PLAYERS
-            }
-        }
-
         if self
             .players
             .iter()
@@ -135,7 +119,7 @@ impl Builder {
         &self.players
     }
 
-    pub fn ready(self) -> Grim {
-        Grim::new(self.creator, self.players)
+    pub fn ready(self) -> Game {
+        Game::new(self.creator, self.players)
     }
 }
