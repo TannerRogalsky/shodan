@@ -4,6 +4,7 @@ pub struct Player {
     pub user: User,
 }
 
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub enum CardType {
     Pip,
     Face,
@@ -50,6 +51,21 @@ impl Deck {
     pub fn len(&self) -> usize {
         self.inner.len()
     }
+
+    pub fn reposition_joker<R: rand::Rng>(&mut self, ratio: f32, rng: &mut R) {
+        if (0f32..=1f32).contains(&ratio) {
+            let high = (ratio * self.inner.len() as f32).floor() as usize;
+            let low = 0;
+            let new_position = if high == low {
+                low
+            } else {
+                rng.gen_range(low, high)
+            };
+            if let Some(position) = self.inner.iter().position(|c| *c == CardType::Joker) {
+                self.inner.swap(position, new_position);
+            }
+        }
+    }
 }
 
 pub struct Game {
@@ -66,6 +82,7 @@ impl Game {
         let mut rng = rand::SeedableRng::from_entropy();
         let mut deck = Deck::new(players.len());
         deck.shuffle(&mut rng);
+        deck.reposition_joker(0., &mut rng);
 
         Self {
             admin,
@@ -88,6 +105,10 @@ impl Game {
     pub fn reset(&mut self) {
         self.deck = Deck::new(self.players.len());
         self.deck.shuffle(&mut self.rng);
+    }
+
+    pub fn reposition_joker(&mut self, ratio: f32) {
+        self.deck.reposition_joker(ratio, &mut self.rng)
     }
 }
 
@@ -133,5 +154,31 @@ impl Builder {
 
     pub fn ready(self) -> Game {
         Game::new(self.creator, self.players, self.custom_id)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn reposition_joker_test() {
+        let mut rng = rand::thread_rng();
+
+        for _ in 0..1000 {
+            let mut deck = Deck::new(1);
+            deck.shuffle(&mut rng);
+            assert!(deck.inner.contains(&CardType::Joker));
+
+            deck.reposition_joker(0., &mut rng);
+            assert_eq!(deck.inner[0], CardType::Joker);
+
+            deck.reposition_joker(0.5, &mut rng);
+            assert!(deck.inner.contains(&CardType::Joker));
+            assert_ne!(deck.inner.last().unwrap(), &CardType::Joker);
+
+            deck.reposition_joker(1., &mut rng);
+            assert!(deck.inner.contains(&CardType::Joker));
+        }
     }
 }

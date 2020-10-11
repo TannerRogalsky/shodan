@@ -182,6 +182,7 @@ enum GrimCmd {
     #[structopt(about = "Reshuffle deck for active game.")]
     Shuffle {
         custom_id: Option<String>,
+        #[structopt(short, long)]
         ratio: Option<f32>,
     },
     #[structopt(about = "End an in-progress game.")]
@@ -408,6 +409,9 @@ impl<'a> GrimContext<'a> {
 
         if let Some(mut game) = get(&games, &key).await {
             game.reset();
+            if let Some(ratio) = ratio {
+                game.reposition_joker(ratio);
+            }
             let content = format!("Deck shuffled succesfully.");
             self.msg.reply(self.ctx, content).await?;
         }
@@ -436,6 +440,4 @@ async fn grim(ctx: &Context, msg: &Message) -> CommandResult {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-}
+mod tests {}
