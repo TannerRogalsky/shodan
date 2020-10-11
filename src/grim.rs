@@ -82,7 +82,7 @@ impl Game {
         let mut rng = rand::SeedableRng::from_entropy();
         let mut deck = Deck::new(players.len());
         deck.shuffle(&mut rng);
-        deck.reposition_joker(0., &mut rng);
+        deck.reposition_joker(0.5, &mut rng);
 
         Self {
             admin,
