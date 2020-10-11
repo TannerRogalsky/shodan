@@ -57,11 +57,12 @@ pub struct Game {
     pub players: Vec<Player>,
     pub deck: Deck,
     pub discard: Vec<CardType>,
+    pub custom_id: Option<String>,
     rng: rand::rngs::StdRng,
 }
 
 impl Game {
-    pub fn new(admin: User, players: Vec<User>) -> Self {
+    pub fn new(admin: User, players: Vec<User>, custom_id: Option<String>) -> Self {
         let mut rng = rand::SeedableRng::from_entropy();
         let mut deck = Deck::new(players.len());
         deck.shuffle(&mut rng);
@@ -71,6 +72,7 @@ impl Game {
             players: players.into_iter().map(|p| Player { user: p }).collect(),
             deck,
             discard: vec![],
+            custom_id,
             rng,
         }
     }
@@ -91,6 +93,7 @@ impl Game {
 
 pub struct Builder {
     pub creator: User,
+    pub custom_id: Option<String>,
     players: Vec<User>,
 }
 
@@ -99,6 +102,15 @@ impl Builder {
         Self {
             players: vec![creator.clone()],
             creator,
+            custom_id: None,
+        }
+    }
+
+    pub fn new_with_custom_id(creator: User, custom_id: String) -> Self {
+        Self {
+            players: vec![creator.clone()],
+            creator,
+            custom_id: Some(custom_id),
         }
     }
 
@@ -120,6 +132,6 @@ impl Builder {
     }
 
     pub fn ready(self) -> Game {
-        Game::new(self.creator, self.players)
+        Game::new(self.creator, self.players, self.custom_id)
     }
 }
