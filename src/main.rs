@@ -6,9 +6,10 @@ use serenity::model::prelude::*;
 use serenity::prelude::*;
 
 mod grim;
+mod jeopardy;
 
 #[group]
-#[commands(grim)]
+#[commands(grim, jeopardy)]
 struct General;
 
 struct Handler;
@@ -39,6 +40,7 @@ async fn main() {
     let mut client = Client::builder(token, intents)
         .event_handler(Handler)
         .framework(framework)
+        .type_map_insert::<jeopardy::Jeopardy>(jeopardy::Jeopardy::new().unwrap())
         .await
         .expect("Error creating client");
 
@@ -70,6 +72,27 @@ async fn grim(ctx: &Context, msg: &Message) -> CommandResult {
         }
         Err(e) => {
             msg.reply(ctx, e.message).await?;
+        }
+    }
+
+    Ok(())
+}
+
+#[command]
+async fn jeopardy(ctx: &Context, msg: &Message) -> CommandResult {
+    let data = ctx.data.read().await;
+    match data.get::<jeopardy::Jeopardy>() {
+        Some(jeopardy) => match jeopardy.random() {
+            Ok(category) => {
+                msg.reply(ctx, jeopardy::Jeopardy::fmt_category(&category))
+                    .await?;
+            }
+            Err(err) => {
+                msg.reply(ctx, err).await?;
+            }
+        },
+        None => {
+            msg.reply(ctx, "Jeopardy module not loaded.").await?;
         }
     }
 
