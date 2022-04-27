@@ -1,0 +1,3 @@
+[submodule "raytracer/rust-raytracer"]
+	path = raytracer/rust-raytracer
+	url = git@github.com:TannerRogalsky/rust-raytracer.git

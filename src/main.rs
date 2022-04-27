@@ -6,10 +6,11 @@ use serenity::model::prelude::*;
 use serenity::prelude::*;
 
 mod grim;
+mod images;
 mod jeopardy;
 
 #[group]
-#[commands(grim, jeopardy)]
+#[commands(grim, jeopardy, earth)]
 struct General;
 
 struct Handler;
@@ -97,6 +98,19 @@ async fn jeopardy(ctx: &Context, msg: &Message) -> CommandResult {
     }
 
     Ok(())
+}
+
+#[command]
+async fn earth(ctx: &Context, msg: &Message) -> CommandResult {
+    let rot = msg
+        .content
+        .split_ascii_whitespace()
+        .last()
+        .and_then(|rot| rot.parse::<f64>().ok())
+        .unwrap_or(0.);
+    println!("ROT: {}", rot);
+    let rot = rot / 360. % 1.;
+    images::earth(ctx, msg.channel_id, rot).await
 }
 
 #[cfg(test)]
