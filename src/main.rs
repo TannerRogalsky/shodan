@@ -1,37 +1,68 @@
-use serenity::framework::standard::{
-    macros::{command, group},
-    CommandResult, StandardFramework,
+use serenity::model::prelude::application_command::{
+    ApplicationCommand, ApplicationCommandInteraction,
 };
 use serenity::model::prelude::*;
 use serenity::prelude::*;
 
-mod grim;
+// mod grim;
 mod images;
 mod jeopardy;
 
-#[group]
-#[commands(grim, jeopardy, earth)]
-struct General;
-
 struct Handler;
+
+const JEOPARDY_CMD: &'static str = "jeopardy";
+const RAYZ_CMD: &'static str = "rayz";
 
 #[serenity::async_trait]
 impl EventHandler for Handler {
     /// Dispatched upon startup.
     ///
     /// Provides data about the bot and the guilds it's in.
-    async fn ready(&self, _ctx: Context, _data_about_bot: Ready) {
+    async fn ready(&self, ctx: Context, _data_about_bot: Ready) {
         println!("BOT READY");
+        ApplicationCommand::set_global_application_commands(&ctx.http, |commands| {
+            commands
+                .create_application_command(|command| {
+                    command
+                        .name(JEOPARDY_CMD)
+                        .description("Displays a random jeopardy category.")
+                })
+                .create_application_command(|command| {
+                    command
+                        .name(RAYZ_CMD)
+                        .description("Ray traces a random image.")
+                })
+        })
+        .await
+        .unwrap();
+    }
+
+    async fn interaction_create(&self, ctx: Context, interaction: Interaction) {
+        if let Interaction::ApplicationCommand(command) = interaction {
+            let result = match command.data.name.as_str() {
+                JEOPARDY_CMD => jeopardy(&ctx, command).await,
+                RAYZ_CMD => rayz(&ctx, command).await,
+                _ => command
+                    .create_interaction_response(&ctx.http, |response| {
+                        response
+                            .kind(InteractionResponseType::ChannelMessageWithSource)
+                            .interaction_response_data(|message| {
+                                message.content("not implemented :(")
+                            })
+                    })
+                    .await
+                    .map_err(Into::into),
+            };
+            if let Err(why) = result {
+                println!("Cannot respond to slash command: {}", why);
+            }
+        }
     }
 }
 
 #[tokio::main]
 async fn main() {
     dotenv::dotenv().unwrap();
-
-    let framework = StandardFramework::new()
-        .configure(|c| c.prefix("!"))
-        .group(&GENERAL_GROUP);
 
     // Login with a bot token from the environment
     let token = std::env::var("BOT_TOKEN").expect("token");
@@ -40,18 +71,17 @@ async fn main() {
     let intents = GatewayIntents::non_privileged() | GatewayIntents::MESSAGE_CONTENT;
     let mut client = Client::builder(token, intents)
         .event_handler(Handler)
-        .framework(framework)
         .type_map_insert::<jeopardy::Jeopardy>(jeopardy::Jeopardy::new().unwrap())
         .await
         .expect("Error creating client");
 
-    {
-        // Open the data lock in write mode, so keys can be inserted to it.
-        let mut data = client.data.write().await;
-
-        data.insert::<grim::GrimGames>(Default::default());
-        data.insert::<grim::GrimBuilders>(Default::default());
-    }
+    // {
+    //     // Open the data lock in write mode, so keys can be inserted to it.
+    //     let mut data = client.data.write().await;
+    //
+    //     data.insert::<grim::GrimGames>(Default::default());
+    //     data.insert::<grim::GrimBuilders>(Default::default());
+    // }
 
     // start listening for events by starting a single shard
     if let Err(why) = client.start().await {
@@ -59,58 +89,47 @@ async fn main() {
     }
 }
 
-#[command]
-async fn grim(ctx: &Context, msg: &Message) -> CommandResult {
-    use structopt::StructOpt;
-    let args = msg
-        .content
-        .split_ascii_whitespace()
-        .map(Into::<std::ffi::OsString>::into);
-    match grim::GrimCmd::from_iter_safe(args) {
-        Ok(cmd) => {
-            let ctx = grim::GrimContext::new(ctx, msg).await;
-            cmd.execute(ctx).await?;
-        }
-        Err(e) => {
-            msg.reply(ctx, e.message).await?;
-        }
-    }
+// async fn grim(ctx: &Context, msg: &Message) -> serenity::framework::standard::CommandResult {
+//     use structopt::StructOpt;
+//     let args = msg
+//         .content
+//         .split_ascii_whitespace()
+//         .map(Into::<std::ffi::OsString>::into);
+//     match grim::GrimCmd::from_iter_safe(args) {
+//         Ok(cmd) => {
+//             let ctx = grim::GrimContext::new(ctx, msg).await;
+//             cmd.execute(ctx).await?;
+//         }
+//         Err(e) => {
+//             msg.reply(ctx, e.message).await?;
+//         }
+//     }
+//
+//     Ok(())
+// }
 
-    Ok(())
-}
-
-#[command]
-async fn jeopardy(ctx: &Context, msg: &Message) -> CommandResult {
+async fn jeopardy(ctx: &Context, command: ApplicationCommandInteraction) -> eyre::Result<()> {
     let data = ctx.data.read().await;
-    match data.get::<jeopardy::Jeopardy>() {
+    let content: std::borrow::Cow<'static, str> = match data.get::<jeopardy::Jeopardy>() {
         Some(jeopardy) => match jeopardy.random() {
-            Ok(category) => {
-                msg.reply(ctx, jeopardy::Jeopardy::fmt_category(&category))
-                    .await?;
-            }
-            Err(err) => {
-                msg.reply(ctx, err).await?;
-            }
+            Ok(category) => jeopardy::Jeopardy::fmt_category(&category).into(),
+            Err(err) => err.into(),
         },
-        None => {
-            msg.reply(ctx, "Jeopardy module not loaded.").await?;
-        }
-    }
+        None => "Jeopardy module not loaded.".into(),
+    };
 
+    command
+        .create_interaction_response(&ctx.http, |response| {
+            response
+                .kind(InteractionResponseType::ChannelMessageWithSource)
+                .interaction_response_data(|message| message.content(content))
+        })
+        .await?;
     Ok(())
 }
 
-#[command]
-async fn earth(ctx: &Context, msg: &Message) -> CommandResult {
-    let rot = msg
-        .content
-        .split_ascii_whitespace()
-        .last()
-        .and_then(|rot| rot.parse::<f64>().ok())
-        .unwrap_or(0.);
-    println!("ROT: {}", rot);
-    let rot = rot / 360. % 1.;
-    images::earth(ctx, msg.channel_id, rot).await
+async fn rayz(ctx: &Context, command: ApplicationCommandInteraction) -> eyre::Result<()> {
+    images::rayz(ctx, command).await
 }
 
 #[cfg(test)]

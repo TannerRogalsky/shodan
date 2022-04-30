@@ -1,3 +1,4 @@
+pub use glam;
 use glam::Vec3;
 
 pub struct Scene {
