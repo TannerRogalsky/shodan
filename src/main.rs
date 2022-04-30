@@ -1,3 +1,4 @@
+use serenity::builder::CreateApplicationCommands;
 use serenity::model::prelude::application_command::{
     ApplicationCommand, ApplicationCommandInteraction,
 };
@@ -18,9 +19,12 @@ impl EventHandler for Handler {
     /// Dispatched upon startup.
     ///
     /// Provides data about the bot and the guilds it's in.
-    async fn ready(&self, ctx: Context, _data_about_bot: Ready) {
+    async fn ready(&self, ctx: Context, data: Ready) {
         println!("BOT READY");
-        ApplicationCommand::set_global_application_commands(&ctx.http, |commands| {
+
+        fn create_interactions(
+            commands: &mut CreateApplicationCommands,
+        ) -> &mut CreateApplicationCommands {
             commands
                 .create_application_command(|command| {
                     command
@@ -32,9 +36,26 @@ impl EventHandler for Handler {
                         .name(RAYZ_CMD)
                         .description("Ray traces a random image.")
                 })
-        })
-        .await
-        .unwrap();
+        }
+
+        for guild in data.guilds {
+            let r = guild
+                .id
+                .set_application_commands(&ctx.http, create_interactions)
+                .await;
+            if let Err(err) = r {
+                let guild = Guild::get(&ctx.http, guild.id).await;
+                let name = guild
+                    .as_ref()
+                    .map(|guild| guild.name.as_str())
+                    .unwrap_or("unknown");
+                println!("Can't set application commands for {}: {}", name, err);
+            }
+        }
+
+        ApplicationCommand::set_global_application_commands(&ctx.http, create_interactions)
+            .await
+            .unwrap();
     }
 
     async fn interaction_create(&self, ctx: Context, interaction: Interaction) {
