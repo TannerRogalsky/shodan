@@ -3,19 +3,21 @@ use serenity::model::prelude::*;
 use serenity::prelude::*;
 
 pub async fn earth(ctx: &Context, channel: ChannelId, rot: f64) -> CommandResult {
-    let buffer = tokio::task::spawn_blocking(move || {
+    let buffer = tokio::task::spawn_blocking::<
+        _,
+        std::result::Result<Vec<u8>, Box<dyn std::error::Error + Send + Sync>>,
+    >(move || {
         let pixels = raytracer::run(rot);
 
         let mut buffer = vec![];
         let mut encoder = png::Encoder::new(&mut buffer, pixels.width as _, pixels.height as _);
         encoder.set_color(png::ColorType::Rgb);
-        let mut writer = encoder.write_header().unwrap();
-        writer.write_image_data(&pixels.pixels).unwrap();
-        writer.finish().unwrap();
-        buffer
+        let mut writer = encoder.write_header()?;
+        writer.write_image_data(&pixels.pixels)?;
+        writer.finish()?;
+        Ok(buffer)
     })
-    .await
-    .unwrap();
+    .await??;
 
     channel
         .send_message(&ctx.http, |m| {

@@ -2,8 +2,10 @@
 name = "spooky-raytracer"
 version = "0.1.0"
 edition = "2021"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+publish = false
 
 [dependencies]
-raytracer = { path = "./rust-raytracer/raytracer" }
+glam = "0.20"
+rayon = "1"
+bytemuck = { version = "1.9", features = ["derive"] }
+image = { version = "0.24", default-features = false, features = ["png", "jpeg_rayon"] }
