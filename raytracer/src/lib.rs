@@ -17,7 +17,12 @@ impl Scene {
         let screen = vec3(x as _, y as _, 0.);
         let scale_factor = (1. / h) * -2.;
         let uv = (screen - vec3(w / 2., h / 2., 0.)) * scale_factor;
-        let ray_dir = self.camera.transform.inverse().transform_point3a(uv).normalize();
+        let ray_dir = self
+            .camera
+            .transform
+            .inverse()
+            .transform_vector3a(uv - p)
+            .normalize();
 
         const MAX_STEPS: usize = 64;
         const EPSILON: f32 = 0.01;
@@ -55,7 +60,7 @@ impl Scene {
             p = p + ray_dir * distance;
         }
 
-        return vec3(1., 0., 1.); // bg color
+        return vec3(1., 0., y as f32 / h); // bg color
     }
 
     pub fn render(&self) -> Vec<u8> {
@@ -134,6 +139,7 @@ pub struct Light {
     pub position: Vec3,
 }
 
+#[derive(Clone)]
 pub enum Material {
     Lambertian(Lambertian),
 }
