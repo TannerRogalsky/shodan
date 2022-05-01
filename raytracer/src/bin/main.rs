@@ -1,3 +1,4 @@
+use glam::vec3a as vec3;
 use spooky_raytracer::*;
 
 fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
@@ -5,21 +6,21 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let earth_texture = earth_texture_file.decode()?;
 
     let default_mat = Lambertian {
-        color: glam::vec3(1., 1., 1.),
+        color: vec3(1., 1., 1.),
         diffuse_weight: 0.8,
         ambient_weight: 0.2,
         texture: None,
     };
-    let (width, height) = (1280, 720);
+    let (width, height) = ((256. * 16. / 9.) as _, 256);
     let scene = Scene {
         width,
         height,
         camera: Camera {
-            position: glam::vec3(0., 0., -1.),
+            position: vec3(0., 0., -1.),
         },
         models: vec![
             Model {
-                position: glam::vec3(-1., 0., 1.),
+                position: vec3(-1., 0., 1.),
                 sdf: Primitive::Sphere { radius: 0.5 },
                 material: Material::Lambertian(Lambertian {
                     texture: Some(earth_texture),
@@ -27,28 +28,28 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
                 }),
             },
             Model {
-                position: glam::vec3(1., 0., 1.),
+                position: vec3(1., 0., 1.),
                 sdf: Primitive::Box {
-                    size: glam::vec3(1., 1., 1.) * 0.5,
+                    size: vec3(1., 1., 1.) * 0.5,
                 },
                 material: Material::Lambertian(default_mat.clone()),
             },
             Model {
-                position: glam::vec3(0., 1., 1.),
+                position: vec3(0., 1., 1.),
                 sdf: Primitive::Dynamic({
                     let b = Primitive::Box {
-                        size: glam::vec3(1., 1., 1.) * 0.25,
+                        size: vec3(1., 1., 1.) * 0.25,
                     };
                     let radius = 0.1;
-                    Box::new(move |p: glam::Vec3| b.eval(p) - radius)
+                    Box::new(move |p| b.eval(p) - radius)
                 }),
                 material: Material::Lambertian(default_mat.clone()),
             },
         ],
         lights: vec![Light {
-            color: glam::vec3(1., 1., 1.),
+            color: vec3(1., 1., 1.),
             intensity: 1.0,
-            position: glam::vec3(0., 0., 1.),
+            position: vec3(0., 0., 1.),
         }],
     };
 

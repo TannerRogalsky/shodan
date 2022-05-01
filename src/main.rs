@@ -39,10 +39,7 @@ impl EventHandler for Handler {
         }
 
         for guild in data.guilds {
-            let r = guild
-                .id
-                .set_application_commands(&ctx.http, create_interactions)
-                .await;
+            let r = guild.id.set_application_commands(&ctx.http, |c| c).await;
             if let Err(err) = r {
                 let guild = Guild::get(&ctx.http, guild.id).await;
                 let name = guild

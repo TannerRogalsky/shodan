@@ -1,5 +1,5 @@
 pub use glam;
-use glam::Vec3;
+use glam::{vec3a as vec3, Vec3A as Vec3};
 
 pub struct Scene {
     pub width: usize,
@@ -10,13 +10,13 @@ pub struct Scene {
 }
 
 impl Scene {
-    fn pixel(&self, x: usize, y: usize) -> glam::Vec3 {
+    fn pixel(&self, x: usize, y: usize) -> Vec3 {
         let w = self.width as f32;
         let h = self.height as f32;
         let mut p = self.camera.position;
-        let screen = glam::vec3(x as _, y as _, 0.);
+        let screen = vec3(x as _, y as _, 0.);
         let scale_factor = (1. / h) * -2.;
-        let uv = (screen - glam::vec3(w / 2., h / 2., 0.)) * scale_factor;
+        let uv = (screen - vec3(w / 2., h / 2., 0.)) * scale_factor;
         let ray_dir = (uv - self.camera.position).normalize();
 
         const MAX_STEPS: usize = 64;
@@ -30,10 +30,10 @@ impl Scene {
             let distance = model.distance_to(p);
             if distance < EPSILON {
                 const H: f32 = 0.001; // approximate gradient with limit as h goes to zero (sufficiently small h)
-                let normal = glam::vec3(
-                    (model.distance_to(p + glam::vec3(H, 0., 0.)) - distance) / H,
-                    (model.distance_to(p + glam::vec3(0., H, 0.)) - distance) / H,
-                    (model.distance_to(p + glam::vec3(0., 0., H)) - distance) / H,
+                let normal = vec3(
+                    (model.distance_to(p + vec3(H, 0., 0.)) - distance) / H,
+                    (model.distance_to(p + vec3(0., H, 0.)) - distance) / H,
+                    (model.distance_to(p + vec3(0., 0., H)) - distance) / H,
                 )
                 .normalize();
 
@@ -48,14 +48,14 @@ impl Scene {
                             model,
                         })
                     })
-                    .fold(glam::vec3(0., 0., 0.), |acc, color| acc + color);
+                    .fold(vec3(0., 0., 0.), |acc, color| acc + color);
                 return color;
             }
 
             p = p + ray_dir * distance;
         }
 
-        return glam::vec3(1., 0., 1.); // bg color
+        return vec3(1., 0., 1.); // bg color
     }
 
     pub fn render(&self) -> Vec<u8> {
@@ -119,7 +119,7 @@ impl Primitive {
             Primitive::Dynamic(sdf) => sdf(point),
             Primitive::Box { size } => {
                 let q = point.abs() - *size;
-                q.max(glam::vec3(0., 0., 0.)).length() + q.x.max(q.y.max(q.z)).min(0.)
+                q.max(vec3(0., 0., 0.)).length() + q.x.max(q.y.max(q.z)).min(0.)
             }
         }
     }
@@ -175,12 +175,11 @@ impl Material {
                         let x = ((texture.width() - 1) as f32 * u).floor() as u32;
                         let y = ((texture.height() - 1) as f32 * v).floor() as u32;
                         let [r, g, b, _a] = image::GenericImageView::get_pixel(texture, x, y).0;
-                        glam::vec3(r as f32 / 255., g as f32 / 255., b as f32 / 255.)
+                        vec3(r as f32 / 255., g as f32 / 255., b as f32 / 255.)
                     })
-                    .unwrap_or(glam::vec3(1., 1., 1.));
+                    .unwrap_or(vec3(1., 1., 1.));
 
-                let diffuse =
-                    (color * texture_color * light_shading_color).max(glam::vec3(0., 0., 0.));
+                let diffuse = (color * texture_color * light_shading_color).max(vec3(0., 0., 0.));
                 let ambient = color * texture_color;
                 diffuse * diffuse_weight + ambient * ambient_weight
             }
