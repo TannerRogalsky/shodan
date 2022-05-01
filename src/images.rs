@@ -23,19 +23,19 @@ pub async fn rayz(ctx: &Context, command: ApplicationCommandInteraction) -> eyre
             },
             models: vec![
                 Model {
-                    position: glam::vec3(-1., 0., 1.),
+                    transform: glam::vec3(-1., 0., 1.),
                     sdf: Primitive::Sphere { radius: 0.5 },
                     material: Material::Lambertian(default_mat.clone()),
                 },
                 Model {
-                    position: glam::vec3(1., 0., 1.),
+                    transform: glam::vec3(1., 0., 1.),
                     sdf: Primitive::Box {
                         size: glam::vec3(1., 1., 1.) * 0.5,
                     },
                     material: Material::Lambertian(default_mat.clone()),
                 },
                 Model {
-                    position: glam::vec3(0., 1., 1.),
+                    transform: glam::vec3(0., 1., 1.),
                     sdf: Primitive::Dynamic({
                         let b = Primitive::Box {
                             size: glam::vec3(1., 1., 1.) * 0.25,

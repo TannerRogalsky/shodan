@@ -1,4 +1,4 @@
-use glam::vec3a as vec3;
+use glam::{vec3a as vec3, Affine3A as Transform};
 use spooky_raytracer::*;
 
 fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
@@ -11,16 +11,19 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         ambient_weight: 0.2,
         texture: None,
     };
-    let (width, height) = ((256. * 16. / 9.) as _, 256);
+    let (height, width) = ((256. * 16. / 9.) as _, 256);
     let scene = Scene {
         width,
         height,
         camera: Camera {
-            position: vec3(0., 0., -1.),
+            transform: glam::Affine3A::from_rotation_translation(
+                glam::Quat::from_rotation_y(0.),
+                glam::vec3(0., 0., -1.),
+            ),
         },
         models: vec![
             Model {
-                position: vec3(-1., 0., 1.),
+                transform: Transform::from_translation(glam::vec3(-1., 0., 1.)),
                 sdf: Primitive::Sphere { radius: 0.5 },
                 material: Material::Lambertian(Lambertian {
                     texture: Some(earth_texture),
@@ -28,14 +31,21 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
                 }),
             },
             Model {
-                position: vec3(1., 0., 1.),
+                transform: Transform::from_rotation_translation(
+                    glam::Quat::from_rotation_y(std::f32::consts::FRAC_PI_3),
+                    glam::vec3(1., 0., 1.),
+                ),
                 sdf: Primitive::Box {
                     size: vec3(1., 1., 1.) * 0.5,
                 },
                 material: Material::Lambertian(default_mat.clone()),
             },
             Model {
-                position: vec3(0., 1., 1.),
+                transform: Transform::from_rotation_translation(
+                    glam::Quat::from_rotation_x(std::f32::consts::FRAC_PI_3)
+                        * glam::Quat::from_rotation_y(std::f32::consts::FRAC_PI_4),
+                    glam::vec3(0., 1., 1.),
+                ),
                 sdf: Primitive::Dynamic({
                     let b = Primitive::Box {
                         size: vec3(1., 1., 1.) * 0.25,

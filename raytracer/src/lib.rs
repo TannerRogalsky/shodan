@@ -13,11 +13,11 @@ impl Scene {
     fn pixel(&self, x: usize, y: usize) -> Vec3 {
         let w = self.width as f32;
         let h = self.height as f32;
-        let mut p = self.camera.position;
+        let mut p = self.camera.transform.transform_point3a(vec3(0., 0., 0.));
         let screen = vec3(x as _, y as _, 0.);
         let scale_factor = (1. / h) * -2.;
         let uv = (screen - vec3(w / 2., h / 2., 0.)) * scale_factor;
-        let ray_dir = (uv - self.camera.position).normalize();
+        let ray_dir = self.camera.transform.inverse().transform_point3a(uv).normalize();
 
         const MAX_STEPS: usize = 64;
         const EPSILON: f32 = 0.01;
@@ -88,18 +88,18 @@ impl Scene {
 }
 
 pub struct Camera {
-    pub position: Vec3,
+    pub transform: glam::Affine3A,
 }
 
 pub struct Model {
-    pub position: Vec3,
+    pub transform: glam::Affine3A,
     pub sdf: Primitive,
     pub material: Material,
 }
 
 impl Model {
     fn distance_to(&self, p: Vec3) -> f32 {
-        self.sdf.eval(p - self.position)
+        self.sdf.eval(self.transform.inverse().transform_point3a(p))
     }
     fn shade(&self, hit: HitRecord) -> Vec3 {
         self.material.shade(hit)
@@ -170,7 +170,7 @@ impl Material {
                 let texture_color = texture
                     .as_ref()
                     .map(|texture| {
-                        let [u, v] = u_v_from_sphere_hit_point(point - model.position);
+                        let [u, v] = u_v_from_sphere_hit_point(point - model.transform.translation);
                         let v = 1. - v;
                         let x = ((texture.width() - 1) as f32 * u).floor() as u32;
                         let y = ((texture.height() - 1) as f32 * v).floor() as u32;
