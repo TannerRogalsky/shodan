@@ -10,6 +10,7 @@ use serenity::prelude::*;
 // mod grim;
 mod images;
 mod jeopardy;
+mod spirits_awaken;
 mod wumpus;
 
 struct Handler;
@@ -17,6 +18,7 @@ struct Handler;
 const JEOPARDY_CMD: &'static str = "jeopardy";
 const RAYZ_CMD: &'static str = "rayz";
 const WUMPUS_CMD: &'static str = "htw";
+const SPIRITS_CMD: &'static str = "spirits";
 
 #[serenity::async_trait]
 impl EventHandler for Handler {
@@ -95,6 +97,17 @@ impl EventHandler for Handler {
                                 })
                         })
                 })
+                .create_application_command(|commands| {
+                    commands
+                        .name(SPIRITS_CMD)
+                        .description("Version 0.0035")
+                        .create_option(|option| {
+                            option
+                                .name("generate")
+                                .description("Generate a new character.")
+                                .kind(ApplicationCommandOptionType::SubCommand)
+                        })
+                })
         }
 
         for guild in data.guilds {
@@ -120,6 +133,7 @@ impl EventHandler for Handler {
                 JEOPARDY_CMD => jeopardy(&ctx, command).await,
                 RAYZ_CMD => rayz(&ctx, command).await,
                 WUMPUS_CMD => htw(&ctx, command).await,
+                SPIRITS_CMD => spirits(&ctx, command).await,
                 _ => command
                     .create_interaction_response(&ctx.http, |response| {
                         response
@@ -166,6 +180,23 @@ async fn main() {
     if let Err(why) = client.start().await {
         println!("An error occurred while running the client: {:?}", why);
     }
+}
+
+async fn spirits(ctx: &Context, command: ApplicationCommandInteraction) -> eyre::Result<()> {
+    let sub = command.data.options.get(0);
+    let content: std::borrow::Cow<'static, str> = match sub.as_ref().map(|sub| sub.name.as_str()) {
+        Some("generate") => spirits_awaken::generate().format().into(),
+        _ => "Unrecognized subcommand.".into(),
+    };
+
+    command
+        .create_interaction_response(&ctx.http, |response| {
+            response
+                .kind(InteractionResponseType::ChannelMessageWithSource)
+                .interaction_response_data(|message| message.content(content))
+        })
+        .await?;
+    Ok(())
 }
 
 type HTWGames = std::collections::HashMap<UserId, wumpus::HuntTheWumpus>;

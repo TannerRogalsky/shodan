@@ -24,3 +24,5 @@ time = { version = "0.3", features = ["serde-human-readable"] }
 
 png = "0.17"
 raytracer = { path = "./raytracer", package = "spooky-raytracer" }
+
+spirits-awaken = { path = "../spirits-awaken" }
