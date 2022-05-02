@@ -1,4 +1,6 @@
-use serenity::builder::CreateApplicationCommands;
+use serenity::model::interactions::application_command::{
+    ApplicationCommandInteractionDataOption, ApplicationCommandOptionType,
+};
 use serenity::model::prelude::application_command::{
     ApplicationCommand, ApplicationCommandInteraction,
 };
@@ -8,11 +10,13 @@ use serenity::prelude::*;
 // mod grim;
 mod images;
 mod jeopardy;
+mod wumpus;
 
 struct Handler;
 
 const JEOPARDY_CMD: &'static str = "jeopardy";
 const RAYZ_CMD: &'static str = "rayz";
+const WUMPUS_CMD: &'static str = "htw";
 
 #[serenity::async_trait]
 impl EventHandler for Handler {
@@ -23,8 +27,8 @@ impl EventHandler for Handler {
         println!("BOT READY");
 
         fn create_interactions(
-            commands: &mut CreateApplicationCommands,
-        ) -> &mut CreateApplicationCommands {
+            commands: &mut serenity::builder::CreateApplicationCommands,
+        ) -> &mut serenity::builder::CreateApplicationCommands {
             commands
                 .create_application_command(|command| {
                     command
@@ -35,6 +39,61 @@ impl EventHandler for Handler {
                     command
                         .name(RAYZ_CMD)
                         .description("Ray traces a random image.")
+                })
+                .create_application_command(|command| {
+                    command
+                        .name(WUMPUS_CMD)
+                        .description("Plays Hunt The Wumpus")
+                        .create_option(|option| {
+                            option
+                                .name("start")
+                                .description("Start a new game of Hunt The Wumpus")
+                                .kind(ApplicationCommandOptionType::SubCommand)
+                        })
+                        .create_option(|option| {
+                            option
+                                .name("status")
+                                .description(
+                                    "Shows the current status of your Hunt The Wumpus game.",
+                                )
+                                .kind(ApplicationCommandOptionType::SubCommand)
+                        })
+                        .create_option(|option| {
+                            option
+                                .name("move")
+                                .description("Move to a new room.")
+                                .kind(ApplicationCommandOptionType::SubCommand)
+                                .create_sub_option(|option| {
+                                    option
+                                        .name("room")
+                                        .description("The room to move to.")
+                                        .kind(ApplicationCommandOptionType::Integer)
+                                        .max_int_value(19)
+                                        .required(true)
+                                })
+                        })
+                        .create_option(|option| {
+                            option
+                                .name("shoot")
+                                .description("Shoot an arrow into an adjacent room.")
+                                .kind(ApplicationCommandOptionType::SubCommand)
+                                .create_sub_option(|option| {
+                                    option
+                                        .name("at_room")
+                                        .description("The room to shoot into.")
+                                        .kind(ApplicationCommandOptionType::Integer)
+                                        .max_int_value(19)
+                                        .required(true)
+                                })
+                                .create_sub_option(|option| {
+                                    option
+                                        .name("room_travel")
+                                        .description("The number of rooms for the arrow to travel.")
+                                        .kind(ApplicationCommandOptionType::Integer)
+                                        .max_int_value(5)
+                                        .required(true)
+                                })
+                        })
                 })
         }
 
@@ -60,6 +119,7 @@ impl EventHandler for Handler {
             let result = match command.data.name.as_str() {
                 JEOPARDY_CMD => jeopardy(&ctx, command).await,
                 RAYZ_CMD => rayz(&ctx, command).await,
+                WUMPUS_CMD => htw(&ctx, command).await,
                 _ => command
                     .create_interaction_response(&ctx.http, |response| {
                         response
@@ -90,6 +150,7 @@ async fn main() {
     let mut client = Client::builder(token, intents)
         .event_handler(Handler)
         .type_map_insert::<jeopardy::Jeopardy>(jeopardy::Jeopardy::new().unwrap())
+        .type_map_insert::<HTWGamesTypeMap>(std::default::Default::default())
         .await
         .expect("Error creating client");
 
@@ -105,6 +166,103 @@ async fn main() {
     if let Err(why) = client.start().await {
         println!("An error occurred while running the client: {:?}", why);
     }
+}
+
+type HTWGames = std::collections::HashMap<UserId, wumpus::HuntTheWumpus>;
+#[derive(Default)]
+struct HTWGamesTypeMap(std::sync::Arc<tokio::sync::Mutex<HTWGames>>);
+impl TypeMapKey for HTWGamesTypeMap {
+    type Value = Self;
+}
+
+async fn htw(ctx: &Context, command: ApplicationCommandInteraction) -> eyre::Result<()> {
+    use std::collections::hash_map::Entry;
+
+    let data = ctx.data.read().await;
+    let games_ty = data.get::<HTWGamesTypeMap>().unwrap();
+    let mut games = games_ty.0.lock().await;
+    let maybe_game = games.entry(command.user.id);
+
+    let cmd = &command.data.options[0];
+    let content: std::borrow::Cow<'static, str> = match cmd.name.as_str() {
+        "start" => match maybe_game {
+            Entry::Occupied(entry) => format!(
+                "There is already a game running for you. \n{}",
+                entry.get().status()
+            )
+            .into(),
+            Entry::Vacant(entry) => {
+                let game = wumpus::HuntTheWumpus::new();
+                let status = game.status();
+                entry.insert(game);
+                status.into()
+            }
+        },
+        name => match maybe_game {
+            Entry::Occupied(mut game) => {
+                let content = match name {
+                    "status" => game.get().status().into(),
+                    "move" => {
+                        let new_room =
+                            cmd.options[0].value.as_ref().unwrap().as_u64().unwrap() as usize;
+                        if game.get_mut().move_player_to(new_room) {
+                            game.get().status().into()
+                        } else {
+                            format!(
+                                "That's not a room you can move to!\n{}",
+                                game.get().status()
+                            )
+                            .into()
+                        }
+                    }
+                    "shoot" => {
+                        fn get_usize(
+                            name: &'static str,
+                        ) -> impl FnMut(&ApplicationCommandInteractionDataOption) -> Option<usize>
+                        {
+                            move |option| {
+                                (option.name == name).then(|| {
+                                    option.value.as_ref().unwrap().as_u64().unwrap() as usize
+                                })
+                            }
+                        }
+
+                        let at_room = cmd.options.iter().find_map(get_usize("at_room")).unwrap();
+                        let room_travel = cmd
+                            .options
+                            .iter()
+                            .find_map(get_usize("room_travel"))
+                            .unwrap();
+                        if game.get_mut().shoot(at_room, room_travel) {
+                            game.get().status().into()
+                        } else {
+                            format!(
+                                "That's not a room you can shoot into!\n{}",
+                                game.get().status()
+                            )
+                            .into()
+                        }
+                    }
+                    _ => "Unrecognized subcommand".into(),
+                };
+                if !game.get().is_running() {
+                    game.remove_entry();
+                }
+                content
+            }
+            Entry::Vacant(_) => "There's no game running for you.".into(),
+        },
+    };
+
+    command
+        .create_interaction_response(&ctx.http, |response| {
+            response
+                .kind(InteractionResponseType::ChannelMessageWithSource)
+                .interaction_response_data(|message| message.content(content))
+        })
+        .await?;
+
+    Ok(())
 }
 
 // async fn grim(ctx: &Context, msg: &Message) -> serenity::framework::standard::CommandResult {

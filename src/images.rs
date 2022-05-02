@@ -7,9 +7,10 @@ pub async fn rayz(ctx: &Context, command: ApplicationCommandInteraction) -> eyre
         _,
         std::result::Result<Vec<u8>, Box<dyn std::error::Error + Send + Sync>>,
     >(move || {
+        use raytracer::glam::vec3a as vec3;
         use raytracer::*;
         let default_mat = Lambertian {
-            color: glam::vec3(1., 1., 1.),
+            color: vec3(1., 1., 1.),
             diffuse_weight: 0.8,
             ambient_weight: 0.2,
             texture: None,
@@ -19,37 +20,17 @@ pub async fn rayz(ctx: &Context, command: ApplicationCommandInteraction) -> eyre
             width,
             height,
             camera: Camera {
-                position: glam::vec3(0., 0., -1.),
+                transform: Default::default(),
             },
-            models: vec![
-                Model {
-                    transform: glam::vec3(-1., 0., 1.),
-                    sdf: Primitive::Sphere { radius: 0.5 },
-                    material: Material::Lambertian(default_mat.clone()),
-                },
-                Model {
-                    transform: glam::vec3(1., 0., 1.),
-                    sdf: Primitive::Box {
-                        size: glam::vec3(1., 1., 1.) * 0.5,
-                    },
-                    material: Material::Lambertian(default_mat.clone()),
-                },
-                Model {
-                    transform: glam::vec3(0., 1., 1.),
-                    sdf: Primitive::Dynamic({
-                        let b = Primitive::Box {
-                            size: glam::vec3(1., 1., 1.) * 0.25,
-                        };
-                        let radius = 0.1;
-                        Box::new(move |p: glam::Vec3| b.eval(p) - radius)
-                    }),
-                    material: Material::Lambertian(default_mat.clone()),
-                },
-            ],
+            models: vec![Model {
+                transform: Default::default(),
+                sdf: Primitive::Sphere { radius: 0.5 },
+                material: Material::Lambertian(default_mat.clone()),
+            }],
             lights: vec![Light {
-                color: glam::vec3(1., 1., 1.),
+                color: vec3(1., 1., 1.),
                 intensity: 1.0,
-                position: glam::vec3(0., 0., 1.),
+                position: vec3(1., 0., 1.),
             }],
         };
         let pixels = scene.render();
