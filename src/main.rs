@@ -10,6 +10,7 @@ use serenity::prelude::*;
 // mod grim;
 mod images;
 mod jeopardy;
+mod roll;
 mod spirits_awaken;
 mod wumpus;
 
@@ -19,6 +20,7 @@ const JEOPARDY_CMD: &'static str = "jeopardy";
 const RAYZ_CMD: &'static str = "rayz";
 const WUMPUS_CMD: &'static str = "htw";
 const SPIRITS_CMD: &'static str = "spirits";
+const ROLL_CMD: &'static str = "roll";
 
 #[serenity::async_trait]
 impl EventHandler for Handler {
@@ -108,6 +110,18 @@ impl EventHandler for Handler {
                                 .kind(ApplicationCommandOptionType::SubCommand)
                         })
                 })
+                .create_application_command(|commands| {
+                    commands
+                        .name(ROLL_CMD)
+                        .description("Let's roll, baby!")
+                        .create_option(|option| {
+                            option
+                                .name("roll")
+                                .description("roll definition")
+                                .kind(ApplicationCommandOptionType::String)
+                                .required(true)
+                        })
+                })
         }
 
         for guild in data.guilds {
@@ -134,6 +148,7 @@ impl EventHandler for Handler {
                 RAYZ_CMD => rayz(&ctx, command).await,
                 WUMPUS_CMD => htw(&ctx, command).await,
                 SPIRITS_CMD => spirits(&ctx, command).await,
+                ROLL_CMD => roll(&ctx, command).await,
                 _ => command
                     .create_interaction_response(&ctx.http, |response| {
                         response
@@ -180,6 +195,42 @@ async fn main() {
     if let Err(why) = client.start().await {
         println!("An error occurred while running the client: {:?}", why);
     }
+}
+
+async fn roll(ctx: &Context, command: ApplicationCommandInteraction) -> eyre::Result<()> {
+    let input = command
+        .data
+        .options
+        .iter()
+        .find_map(|option| {
+            (option.name == "roll").then(|| option.value.as_ref().and_then(|value| value.as_str()))
+        })
+        .flatten()
+        .unwrap_or("");
+
+    let name = if let Some(guild) = command.guild_id {
+        command
+            .user
+            .nick_in(&ctx.http, guild)
+            .await
+            .unwrap_or(command.user.name.clone())
+    } else {
+        command.user.name.clone()
+    };
+    let content = match roll::roll(input) {
+        Ok(roll) => format!("{} rolled {}: {}", name, input, roll),
+        Err(err) => format!("{}", err),
+    };
+
+    command
+        .create_interaction_response(&ctx.http, |response| {
+            response
+                .kind(InteractionResponseType::ChannelMessageWithSource)
+                .interaction_response_data(|message| message.content(content))
+        })
+        .await?;
+
+    Ok(())
 }
 
 async fn spirits(ctx: &Context, command: ApplicationCommandInteraction) -> eyre::Result<()> {

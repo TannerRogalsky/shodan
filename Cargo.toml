@@ -26,3 +26,5 @@ png = "0.17"
 raytracer = { path = "./raytracer", package = "spooky-raytracer" }
 
 spirits-awaken = { path = "../spirits-awaken" }
+
+caith = "4.2"
