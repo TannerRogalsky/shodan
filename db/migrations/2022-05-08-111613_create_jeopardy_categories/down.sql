@@ -1,0 +1,1 @@
+DROP TABLE jeopardy_categories

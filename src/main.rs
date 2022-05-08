@@ -178,7 +178,7 @@ async fn main() {
     let intents = GatewayIntents::non_privileged() | GatewayIntents::MESSAGE_CONTENT;
     let mut client = Client::builder(token, intents)
         .event_handler(Handler)
-        .type_map_insert::<jeopardy::Jeopardy>(jeopardy::Jeopardy::new().unwrap())
+        .type_map_insert::<jeopardy::Jeopardy>(::jeopardy::Jeopardy::new().unwrap())
         .type_map_insert::<HTWGamesTypeMap>(std::default::Default::default())
         .await
         .expect("Error creating client");
@@ -370,7 +370,7 @@ async fn jeopardy(ctx: &Context, command: ApplicationCommandInteraction) -> eyre
     let data = ctx.data.read().await;
     let content: std::borrow::Cow<'static, str> = match data.get::<jeopardy::Jeopardy>() {
         Some(jeopardy) => match jeopardy.random() {
-            Ok(category) => jeopardy::Jeopardy::fmt_category(&category).into(),
+            Ok(category) => ::jeopardy::Jeopardy::fmt_category(&category).into(),
             Err(err) => err.into(),
         },
         None => "Jeopardy module not loaded.".into(),
