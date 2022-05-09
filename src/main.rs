@@ -8,6 +8,7 @@ use serenity::model::prelude::*;
 use serenity::prelude::*;
 
 // mod grim;
+mod db_support;
 mod images;
 mod jeopardy;
 mod roll;
@@ -175,11 +176,13 @@ async fn main() {
     let token = std::env::var("BOT_TOKEN").expect("token");
     assert!(serenity::utils::validate_token(&token).is_ok());
 
+    let db = tokio::task::block_in_place(|| db::DB::new(db::DB::env_url().unwrap())).unwrap();
+
     let intents = GatewayIntents::non_privileged() | GatewayIntents::MESSAGE_CONTENT;
     let mut client = Client::builder(token, intents)
         .event_handler(Handler)
-        .type_map_insert::<jeopardy::Jeopardy>(::jeopardy::Jeopardy::new().unwrap())
-        .type_map_insert::<HTWGamesTypeMap>(std::default::Default::default())
+        .type_map_insert::<HTWGamesTypeMap>(Default::default())
+        .type_map_insert::<db_support::DB>(db)
         .await
         .expect("Error creating client");
 
@@ -367,13 +370,24 @@ async fn htw(ctx: &Context, command: ApplicationCommandInteraction) -> eyre::Res
 // }
 
 async fn jeopardy(ctx: &Context, command: ApplicationCommandInteraction) -> eyre::Result<()> {
-    let data = ctx.data.read().await;
-    let content: std::borrow::Cow<'static, str> = match data.get::<jeopardy::Jeopardy>() {
-        Some(jeopardy) => match jeopardy.random() {
-            Ok(category) => ::jeopardy::Jeopardy::fmt_category(&category).into(),
-            Err(err) => err.into(),
-        },
-        None => "Jeopardy module not loaded.".into(),
+    let mut data = ctx.data.write().await;
+    let content: std::borrow::Cow<'static, str> = match data.get_mut::<db_support::DB>() {
+        Some(db) => {
+            let fetch = move || -> eyre::Result<_> {
+                let (mut c, mut q) = db.random_jeopardy_category()?;
+                while q.len() < 5 {
+                    let (nc, nq) = db.random_jeopardy_category()?;
+                    c = nc;
+                    q = nq;
+                }
+                Ok((c, q))
+            };
+            match tokio::task::block_in_place(fetch) {
+                Ok((category, questions)) => jeopardy::print(&category, &questions).into(),
+                Err(err) => err.to_string().into(),
+            }
+        }
+        None => "DB module not loaded.".into(),
     };
 
     command

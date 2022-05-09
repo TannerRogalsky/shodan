@@ -20,7 +20,7 @@ rand = "0.8"
 dotenv = "0.15"
 eyre = "0.6"
 
-jeopardy = { path = "./jeopardy" }
+db = { path = "./db" }
 
 png = "0.17"
 raytracer = { path = "./raytracer", package = "spooky-raytracer" }
