@@ -24,3 +24,8 @@ pub fn print(category: &JeopardyCategory, questions: &[JeopardyQuestion]) -> Str
 
     out
 }
+
+pub enum Vote {
+    Up,
+    Down,
+}

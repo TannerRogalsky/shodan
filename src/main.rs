@@ -1,3 +1,4 @@
+use crate::jeopardy::Vote;
 use serenity::model::interactions::application_command::{
     ApplicationCommandInteractionDataOption, ApplicationCommandOptionType,
 };
@@ -165,6 +166,54 @@ impl EventHandler for Handler {
                 println!("Cannot respond to slash command: {}", why);
             }
         }
+    }
+
+    async fn reaction_add(&self, ctx: Context, add_reaction: Reaction) {
+        if let Some(vote) = get_vote(add_reaction.emoji.as_data().as_str()) {
+            let mut db = get_data::<db_support::DB, _>(&ctx).await;
+            let discord_message_id = add_reaction.message_id.0;
+            let result = match vote {
+                Vote::Up => db.increment_jeopardy_category_post(discord_message_id),
+                Vote::Down => db.decrement_jeopardy_category_post(discord_message_id),
+            };
+            if let Err(err) = result {
+                eprintln!("{}", err);
+            }
+        }
+    }
+
+    async fn reaction_remove(&self, ctx: Context, removed_reaction: Reaction) {
+        if let Some(vote) = get_vote(removed_reaction.emoji.as_data().as_str()) {
+            let mut db = get_data::<db_support::DB, _>(&ctx).await;
+            let discord_message_id = removed_reaction.message_id.0;
+            let result = match vote {
+                Vote::Up => db.decrement_jeopardy_category_post(discord_message_id),
+                Vote::Down => db.increment_jeopardy_category_post(discord_message_id),
+            };
+            if let Err(err) = result {
+                eprintln!("{}", err);
+            }
+        }
+    }
+}
+
+async fn get_data<T, U>(ctx: &Context) -> <T as TypeMapKey>::Value
+where
+    T: TypeMapKey<Value = U>,
+    U: Clone + Send + Sync,
+{
+    let data_read = ctx.data.read().await;
+    data_read
+        .get::<T>()
+        .expect("Couldn't find data in context.")
+        .clone()
+}
+
+fn get_vote(reaction: &str) -> Option<jeopardy::Vote> {
+    match reaction {
+        "👍" => Some(jeopardy::Vote::Up),
+        "👎" => Some(jeopardy::Vote::Down),
+        _ => None,
     }
 }
 
@@ -370,24 +419,23 @@ async fn htw(ctx: &Context, command: ApplicationCommandInteraction) -> eyre::Res
 // }
 
 async fn jeopardy(ctx: &Context, command: ApplicationCommandInteraction) -> eyre::Result<()> {
-    let mut data = ctx.data.write().await;
-    let content: std::borrow::Cow<'static, str> = match data.get_mut::<db_support::DB>() {
-        Some(db) => {
-            let fetch = move || -> eyre::Result<_> {
-                let (mut c, mut q) = db.random_jeopardy_category()?;
-                while q.len() < 5 {
-                    let (nc, nq) = db.random_jeopardy_category()?;
-                    c = nc;
-                    q = nq;
-                }
-                Ok((c, q))
-            };
-            match tokio::task::block_in_place(fetch) {
-                Ok((category, questions)) => jeopardy::print(&category, &questions).into(),
-                Err(err) => err.to_string().into(),
+    let fetch = {
+        let mut db = get_data::<db_support::DB, _>(ctx).await;
+        move || -> eyre::Result<_> {
+            let (mut c, mut q) = db.random_jeopardy_category()?;
+            while q.len() < 5 {
+                let (nc, nq) = db.random_jeopardy_category()?;
+                c = nc;
+                q = nq;
             }
+            Ok((c, q))
         }
-        None => "DB module not loaded.".into(),
+    };
+    let result = tokio::task::block_in_place(fetch);
+
+    let (content, category) = match result {
+        Ok((category, questions)) => (jeopardy::print(&category, &questions), Some(category)),
+        Err(err) => (format!("{}", err), None),
     };
 
     command
@@ -397,6 +445,14 @@ async fn jeopardy(ctx: &Context, command: ApplicationCommandInteraction) -> eyre
                 .interaction_response_data(|message| message.content(content))
         })
         .await?;
+    if let Some(category) = category {
+        let msg = command.get_interaction_response(&ctx.http).await?;
+        tokio::task::block_in_place({
+            let mut db = get_data::<db_support::DB, _>(ctx).await;
+            move || db.record_jeopardy_category_post(category.id, msg.id.0)
+        })?;
+    }
+
     Ok(())
 }
 

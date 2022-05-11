@@ -33,6 +33,17 @@ pub struct JeopardyQuestion {
     pub updated_at: chrono::NaiveDateTime,
 }
 
+#[derive(Debug, Clone, Queryable, Identifiable, Associations)]
+#[diesel(belongs_to(JeopardyCategory), table_name = posted_jeopardy_categories)]
+pub struct PostedJeopardyCategory {
+    pub id: uuid::Uuid,
+    pub jeopardy_category_id: uuid::Uuid,
+    pub discord_message_id: i64,
+    pub rating: i32,
+    pub created_at: chrono::NaiveDateTime,
+    pub updated_at: chrono::NaiveDateTime,
+}
+
 #[derive(Insertable)]
 #[diesel(table_name = jeopardy_shows)]
 pub struct NewJeopardyShow {

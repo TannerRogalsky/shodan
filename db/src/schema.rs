@@ -32,11 +32,24 @@ diesel::table! {
     }
 }
 
+diesel::table! {
+    posted_jeopardy_categories (id) {
+        id -> Uuid,
+        jeopardy_category_id -> Uuid,
+        discord_message_id -> Int8,
+        rating -> Int4,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+    }
+}
+
 diesel::joinable!(jeopardy_categories -> jeopardy_shows (jeopardy_show_number));
 diesel::joinable!(jeopardy_questions -> jeopardy_categories (jeopardy_category_id));
+diesel::joinable!(posted_jeopardy_categories -> jeopardy_categories (jeopardy_category_id));
 
 diesel::allow_tables_to_appear_in_same_query!(
     jeopardy_categories,
     jeopardy_questions,
     jeopardy_shows,
+    posted_jeopardy_categories,
 );
