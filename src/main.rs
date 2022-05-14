@@ -235,14 +235,6 @@ async fn main() {
         .await
         .expect("Error creating client");
 
-    // {
-    //     // Open the data lock in write mode, so keys can be inserted to it.
-    //     let mut data = client.data.write().await;
-    //
-    //     data.insert::<grim::GrimGames>(Default::default());
-    //     data.insert::<grim::GrimBuilders>(Default::default());
-    // }
-
     // start listening for events by starting a single shard
     if let Err(why) = client.start().await {
         println!("An error occurred while running the client: {:?}", why);
@@ -399,36 +391,20 @@ async fn htw(ctx: &Context, command: ApplicationCommandInteraction) -> eyre::Res
     Ok(())
 }
 
-// async fn grim(ctx: &Context, msg: &Message) -> serenity::framework::standard::CommandResult {
-//     use structopt::StructOpt;
-//     let args = msg
-//         .content
-//         .split_ascii_whitespace()
-//         .map(Into::<std::ffi::OsString>::into);
-//     match grim::GrimCmd::from_iter_safe(args) {
-//         Ok(cmd) => {
-//             let ctx = grim::GrimContext::new(ctx, msg).await;
-//             cmd.execute(ctx).await?;
-//         }
-//         Err(e) => {
-//             msg.reply(ctx, e.message).await?;
-//         }
-//     }
-//
-//     Ok(())
-// }
-
 async fn jeopardy(ctx: &Context, command: ApplicationCommandInteraction) -> eyre::Result<()> {
     let fetch = {
         let mut db = get_data::<db_support::DB, _>(ctx).await;
         move || -> eyre::Result<_> {
-            let (mut c, mut q) = db.random_jeopardy_category()?;
-            while q.len() < 5 {
-                let (nc, nq) = db.random_jeopardy_category()?;
-                c = nc;
-                q = nq;
-            }
-            Ok((c, q))
+            // 100 is a guard against an infinite loop
+            (0..100)
+                .find_map(|_| {
+                    let result = db.random_jeopardy_category();
+                    match result {
+                        Ok((c, q)) => (q.len() < 5).then(|| Ok((c, q))),
+                        Err(err) => Some(Err(err)),
+                    }
+                })
+                .unwrap()
         }
     };
     let result = tokio::task::block_in_place(fetch);
