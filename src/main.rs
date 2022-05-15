@@ -45,6 +45,13 @@ impl EventHandler for Handler {
                     command
                         .name(RAYZ_CMD)
                         .description("Ray traces a random image.")
+                        .create_option(|option| {
+                            option
+                                .name("description")
+                                .description("A description of the scene in eisenscript.")
+                                .kind(ApplicationCommandOptionType::String)
+                                .required(true)
+                        })
                 })
                 .create_application_command(|command| {
                     command
