@@ -50,7 +50,6 @@ impl Scene {
                             light,
                             normal,
                             point: p,
-                            model,
                         })
                     })
                     .fold(vec3(0., 0., 0.), |acc, color| acc + color);
@@ -97,7 +96,7 @@ pub struct Camera {
 }
 
 pub struct Model {
-    pub transform: glam::Affine3A,
+    pub transform: glam::Mat4,
     pub sdf: Primitive,
     pub material: Material,
 }
@@ -160,7 +159,6 @@ impl Material {
                     light,
                     normal,
                     point,
-                    model,
                     ..
                 } = hit;
                 let Lambertian {
@@ -176,7 +174,7 @@ impl Material {
                 let texture_color = texture
                     .as_ref()
                     .map(|texture| {
-                        let [u, v] = u_v_from_sphere_hit_point(point - model.transform.translation);
+                        let [u, v] = u_v_from_sphere_hit_point(point);
                         let v = 1. - v;
                         let x = ((texture.width() - 1) as f32 * u).floor() as u32;
                         let y = ((texture.height() - 1) as f32 * v).floor() as u32;
@@ -197,7 +195,6 @@ struct HitRecord<'a> {
     light: &'a Light,
     normal: Vec3,
     point: Vec3,
-    model: &'a Model,
 }
 
 fn u_v_from_sphere_hit_point(hit_point_on_sphere: Vec3) -> [f32; 2] {

@@ -8,7 +8,6 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         color: vec3(1., 1., 1.),
         diffuse_weight: 0.8,
         ambient_weight: 0.2,
-        texture: None,
     });
     let camera = Camera {
         transform: glam::Affine3A::from_rotation_translation(

@@ -5,7 +5,7 @@ edition = "2021"
 publish = false
 
 [dependencies]
-glam = "0.20"
+glam = { version = "0.20", features = ["mint"] }
 rayon = "1"
 bytemuck = { version = "1.9", features = ["derive"] }
 image = { version = "0.24", default-features = false, features = ["png", "jpeg_rayon"] }

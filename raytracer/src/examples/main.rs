@@ -2,14 +2,10 @@ use glam::{vec3a as vec3, Affine3A as Transform};
 use spooky_raytracer::*;
 
 fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let earth_texture_file = image::io::Reader::open("data/2k_earth_daymap.jpg")?;
-    let earth_texture = earth_texture_file.decode()?;
-
     let default_mat = Lambertian {
         color: vec3(1., 1., 1.),
         diffuse_weight: 0.8,
         ambient_weight: 0.2,
-        texture: None,
     };
     let (height, width) = ((256. * 16. / 9.) as _, 256);
     let scene = Scene {
@@ -26,7 +22,6 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
                 transform: Transform::from_translation(glam::vec3(-1., 0., 1.)),
                 sdf: Primitive::Sphere { radius: 0.5 },
                 material: Material::Lambertian(Lambertian {
-                    texture: Some(earth_texture),
                     ..default_mat.clone()
                 }),
             },
