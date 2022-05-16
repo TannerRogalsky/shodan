@@ -407,7 +407,7 @@ async fn jeopardy(ctx: &Context, command: ApplicationCommandInteraction) -> eyre
                 .find_map(|_| {
                     let result = db.random_jeopardy_category();
                     match result {
-                        Ok((c, q)) => (q.len() < 5).then(|| Ok((c, q))),
+                        Ok((c, q)) => (q.len() == 5).then(|| Ok((c, q))),
                         Err(err) => Some(Err(err)),
                     }
                 })
