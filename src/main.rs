@@ -1,4 +1,5 @@
 use crate::jeopardy::Vote;
+use serenity::builder::CreateEmbed;
 use serenity::model::interactions::application_command::{
     ApplicationCommandInteractionDataOption, ApplicationCommandOptionType,
 };
@@ -9,6 +10,7 @@ use serenity::model::prelude::*;
 use serenity::prelude::*;
 
 // mod grim;
+mod dalle_support;
 mod db_support;
 mod images;
 mod jeopardy;
@@ -23,6 +25,7 @@ const RAYZ_CMD: &'static str = "rayz";
 const WUMPUS_CMD: &'static str = "htw";
 const SPIRITS_CMD: &'static str = "spirits";
 const ROLL_CMD: &'static str = "roll";
+const DALLE_CMD: &'static str = "dalle";
 
 #[serenity::async_trait]
 impl EventHandler for Handler {
@@ -131,6 +134,18 @@ impl EventHandler for Handler {
                                 .required(true)
                         })
                 })
+                .create_application_command(|commands| {
+                    commands
+                        .name(DALLE_CMD)
+                        .description("Generate images.")
+                        .create_option(|option| {
+                            option
+                                .name("prompt")
+                                .description("Some text to feed to the generator.")
+                                .kind(ApplicationCommandOptionType::String)
+                                .required(true)
+                        })
+                })
         }
 
         for guild in data.guilds {
@@ -158,6 +173,7 @@ impl EventHandler for Handler {
                 WUMPUS_CMD => htw(&ctx, command).await,
                 SPIRITS_CMD => spirits(&ctx, command).await,
                 ROLL_CMD => roll(&ctx, command).await,
+                DALLE_CMD => generate(&ctx, command).await,
                 _ => command
                     .create_interaction_response(&ctx.http, |response| {
                         response
@@ -232,6 +248,16 @@ async fn main() {
     let token = std::env::var("BOT_TOKEN").expect("token");
     assert!(serenity::utils::validate_token(&token).is_ok());
 
+    let dalle = if let Ok(url) = std::env::var("DALLE_URL") {
+        let r = dalle::Dalle::new(url).await;
+        if let Err(err) = &r {
+            eprintln!("{}", err);
+        }
+        r.ok()
+    } else {
+        None
+    };
+
     let db = tokio::task::block_in_place(|| db::DB::new(db::DB::env_url().unwrap())).unwrap();
 
     let intents = GatewayIntents::non_privileged() | GatewayIntents::MESSAGE_CONTENT;
@@ -239,6 +265,7 @@ async fn main() {
         .event_handler(Handler)
         .type_map_insert::<HTWGamesTypeMap>(Default::default())
         .type_map_insert::<db_support::DB>(db)
+        .type_map_insert::<dalle_support::DalleSupport>(dalle)
         .await
         .expect("Error creating client");
 
@@ -246,6 +273,61 @@ async fn main() {
     if let Err(why) = client.start().await {
         println!("An error occurred while running the client: {:?}", why);
     }
+}
+
+async fn generate(ctx: &Context, command: ApplicationCommandInteraction) -> eyre::Result<()> {
+    let prompt = command
+        .data
+        .options
+        .first()
+        .and_then(|option| option.value.as_ref())
+        .and_then(|option| option.as_str())
+        .unwrap();
+    if let Some(dalle) = get_data::<dalle_support::DalleSupport, _>(ctx).await {
+        command
+            .create_interaction_response(&ctx.http, |response| {
+                response
+                    .kind(InteractionResponseType::DeferredChannelMessageWithSource)
+                    .interaction_response_data(|data| data.content("Generating images."))
+            })
+            .await?;
+
+        match dalle.generate(prompt, 4).await {
+            Ok(imgs) => {
+                command
+                    .edit_original_interaction_response(&ctx.http, |response| {
+                        let embeds = imgs
+                            .generated_imgs
+                            .into_iter()
+                            .map(|img| {
+                                let mut embed = CreateEmbed::default();
+                                embed.image(img);
+                                embed
+                            })
+                            .collect();
+                        response.set_embeds(embeds)
+                    })
+                    .await?;
+            }
+            Err(err) => {
+                command
+                    .edit_original_interaction_response(&ctx.http, |response| response.content(err))
+                    .await?;
+            }
+        }
+    } else {
+        command
+            .create_interaction_response(&ctx.http, |response| {
+                response
+                    .kind(InteractionResponseType::ChannelMessageWithSource)
+                    .interaction_response_data(|data| {
+                        data.ephemeral(true).content("Dalle backend not connected.")
+                    })
+            })
+            .await?;
+    }
+
+    Ok(())
 }
 
 async fn roll(ctx: &Context, command: ApplicationCommandInteraction) -> eyre::Result<()> {

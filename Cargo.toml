@@ -4,6 +4,7 @@ members = [
     "raytracer-viz",
     "db",
     "jeopardy",
+    "dalle",
 ]
 
 [package]
@@ -31,3 +32,5 @@ mint = "0.5"
 spirits-awaken = { path = "../spirits-awaken" }
 
 caith = "4.2"
+
+dalle = { path = "./dalle" }
