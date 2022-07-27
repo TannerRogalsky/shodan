@@ -1,3 +1,5 @@
+use thiserror::Error;
+
 #[derive(Debug, Clone)]
 pub struct Dalle {
     client: reqwest::Client,
@@ -22,14 +24,19 @@ impl Dalle {
         }
     }
 
-    pub async fn generate(&self, prompt: &str, count: usize) -> reqwest::Result<GenerateResponse> {
+    pub async fn generate(
+        &self,
+        prompt: &str,
+        count: usize,
+    ) -> Result<GenerateResponse, GenerateError> {
         #[derive(serde::Serialize)]
         struct GenerateBody<'a> {
             text: &'a str,
             num_images: usize,
         }
 
-        self.client
+        Ok(self
+            .client
             .post(self.url.clone())
             .json(&GenerateBody {
                 text: prompt,
@@ -37,16 +44,46 @@ impl Dalle {
             })
             .send()
             .await?
-            .json()
-            .await
+            .json::<Intermediate>()
+            .await?
+            .try_into()?)
     }
 }
 
+#[derive(Error, Debug)]
+pub enum GenerateError {
+    #[error("reqwest error")]
+    Reqwest(#[from] reqwest::Error),
+    #[error("decode error")]
+    DecodeError(#[from] base64::DecodeError),
+}
+
 #[derive(Debug, Clone, serde::Deserialize)]
-pub struct GenerateResponse {
+struct Intermediate {
     #[serde(rename = "generatedImgs")]
-    pub generated_imgs: Vec<String>,
+    generated_imgs: Vec<String>,
     #[serde(rename = "generatedImgsFormat")]
+    generated_imgs_format: String,
+}
+
+impl TryFrom<Intermediate> for GenerateResponse {
+    type Error = base64::DecodeError;
+
+    fn try_from(value: Intermediate) -> Result<Self, Self::Error> {
+        Ok(Self {
+            generated_imgs: value
+                .generated_imgs
+                .into_iter()
+                .map(|v| base64::decode(v))
+                .collect::<Result<_, _>>()?,
+            generated_imgs_format: value.generated_imgs_format,
+        })
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct GenerateResponse {
+    pub generated_imgs: Vec<Vec<u8>>,
     pub generated_imgs_format: String,
 }
 

@@ -26,10 +26,10 @@ db = { path = "./db" }
 
 png = "0.17"
 raytracer = { path = "./raytracer", package = "spooky-raytracer" }
-eisenscript = { path = "../eisenscript" }
+eisenscript = { git = "https://github.com/TannerRogalsky/eisenscript" }
 mint = "0.5"
 
-spirits-awaken = { path = "../spirits-awaken" }
+spirits-awaken = { git = "https://github.com/TannerRogalsky/spirits-awaken" }
 
 caith = "4.2"
 

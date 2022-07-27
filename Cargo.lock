@@ -484,8 +484,10 @@ checksum = "b365fabc795046672053e29c954733ec3b05e4be654ab130fe8f1f94d7051f35"
 name = "dalle"
 version = "0.1.0"
 dependencies = [
+ "base64",
  "reqwest",
  "serde",
+ "thiserror",
  "tokio",
 ]
 
@@ -629,6 +631,7 @@ checksum = "9ea835d29036a4087793836fa931b08837ad5e957da9e23886b29586fb9b6650"
 [[package]]
 name = "eisenscript"
 version = "0.1.0"
+source = "git+https://github.com/TannerRogalsky/eisenscript#954c3965e50d3200ca7fbaf2de3a919fdf608e4a"
 dependencies = [
  "approx",
  "itertools",
@@ -2472,6 +2475,7 @@ checksum = "6e63cff320ae2c57904679ba7cb63280a3dc4613885beafb148ee7bf9aa9042d"
 [[package]]
 name = "spirits-awaken"
 version = "0.1.0"
+source = "git+https://github.com/TannerRogalsky/spirits-awaken#1a990b8ae139d34ba8ede20cd6f677db6d33fc8b"
 dependencies = [
  "wasm-bindgen",
 ]
