@@ -299,7 +299,7 @@ async fn generate(ctx: &Context, command: ApplicationCommandInteraction) -> eyre
 
         match dalle.generate(prompt, 4).await {
             Ok(imgs) => {
-                let folder = uuid::Uuid::new_v4();
+                let folder = format!("dalle/{}", uuid::Uuid::new_v4());
                 let uploads = imgs
                     .generated_imgs
                     .into_iter()
