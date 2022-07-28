@@ -1,0 +1,17 @@
+[package]
+name = "do_spaces"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+reqwest = "0.11"
+aws-sdk-s3 = "0.15"
+aws-types = "0.15"
+aws-smithy-http = "0.45"
+http = "0.2"
+thiserror = "1"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["full"] }

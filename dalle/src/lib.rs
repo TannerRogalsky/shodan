@@ -52,9 +52,9 @@ impl Dalle {
 
 #[derive(Error, Debug)]
 pub enum GenerateError {
-    #[error("reqwest error")]
+    #[error("Request error: {0}")]
     Reqwest(#[from] reqwest::Error),
-    #[error("decode error")]
+    #[error("Base64 decode error: {0}")]
     DecodeError(#[from] base64::DecodeError),
 }
 

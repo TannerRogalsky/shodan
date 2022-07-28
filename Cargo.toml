@@ -5,6 +5,7 @@ members = [
     "db",
     "jeopardy",
     "dalle",
+    "do_spaces",
 ]
 
 [package]
@@ -21,6 +22,8 @@ tokio = { version = "1", features = ["full"] }
 rand = "0.8"
 dotenv = "0.15"
 eyre = "0.6"
+uuid = { version = "1", features = ["v4"] }
+futures = "0.3"
 
 db = { path = "./db" }
 
@@ -34,3 +37,4 @@ spirits-awaken = { git = "https://github.com/TannerRogalsky/spirits-awaken" }
 caith = "4.2"
 
 dalle = { path = "./dalle" }
+do_spaces = { path = "./do_spaces" }

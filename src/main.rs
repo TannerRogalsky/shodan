@@ -10,11 +10,11 @@ use serenity::model::prelude::*;
 use serenity::prelude::*;
 
 // mod grim;
-mod dalle_support;
 mod db_support;
 mod images;
 mod jeopardy;
 mod roll;
+mod serenity_impls;
 mod spirits_awaken;
 mod wumpus;
 
@@ -248,6 +248,9 @@ async fn main() {
     let token = std::env::var("BOT_TOKEN").expect("token");
     assert!(serenity::utils::validate_token(&token).is_ok());
 
+    let s3 =
+        do_spaces::Client::new(std::env::var("DO_SPACES_SECRET").expect("need DO_SPACES_SECRET"));
+
     let dalle = if let Ok(url) = std::env::var("DALLE_URL") {
         let r = dalle::Dalle::new(url).await;
         if let Err(err) = &r {
@@ -265,7 +268,8 @@ async fn main() {
         .event_handler(Handler)
         .type_map_insert::<HTWGamesTypeMap>(Default::default())
         .type_map_insert::<db_support::DB>(db)
-        .type_map_insert::<dalle_support::DalleSupport>(dalle)
+        .type_map_insert::<serenity_impls::DalleSupport>(dalle)
+        .type_map_insert::<serenity_impls::DoSpacesSupport>(s3)
         .await
         .expect("Error creating client");
 
@@ -283,7 +287,8 @@ async fn generate(ctx: &Context, command: ApplicationCommandInteraction) -> eyre
         .and_then(|option| option.value.as_ref())
         .and_then(|option| option.as_str())
         .unwrap();
-    if let Some(dalle) = get_data::<dalle_support::DalleSupport, _>(ctx).await {
+    let s3 = get_data::<serenity_impls::DoSpacesSupport, _>(ctx).await;
+    if let Some(dalle) = get_data::<serenity_impls::DalleSupport, _>(ctx).await {
         command
             .create_interaction_response(&ctx.http, |response| {
                 response
@@ -294,47 +299,60 @@ async fn generate(ctx: &Context, command: ApplicationCommandInteraction) -> eyre
 
         match dalle.generate(prompt, 4).await {
             Ok(imgs) => {
-                let paths = imgs
+                let folder = uuid::Uuid::new_v4();
+                let uploads = imgs
                     .generated_imgs
-                    .iter()
-                    .cloned()
+                    .into_iter()
                     .enumerate()
-                    .map(|(index, data)| {
-                        let filename = format!("{}.{}", index, imgs.generated_imgs_format);
-                        AttachmentType::Bytes {
-                            data: data.into(),
-                            filename,
-                        }
+                    .map(|(index, img)| {
+                        let key = format!("{}/{}.jpeg", folder, index);
+                        s3.put_jpeg(key, img)
                     });
-                let mut req = serenity::http::request::RequestBuilder::new(
-                    serenity::http::routing::RouteInfo::EditOriginalInteractionResponse {
-                        application_id: command.application_id.0,
-                        interaction_token: &command.token,
-                    },
-                );
-                req.multipart(Some(serenity::http::multipart::Multipart {
-                    files: paths.into_iter().map(Into::into).collect(),
-                    payload_json: None,
-                    fields: vec![],
-                }))
-                .body(Some(serenity::json::to));
-                ctx.http.fire(req.build()).await?;
-                // command
-                //     .edit_original_interaction_response(&ctx.http, |response| {
-                //         let embeds = imgs
-                //             .generated_imgs
-                //             .iter()
-                //             .enumerate()
-                //             .map(|(index, _data)| {
-                //                 let filename = format!("{}.{}", index, imgs.generated_imgs_format);
-                //                 let mut embed = CreateEmbed::default();
-                //                 embed.attachment(filename);
-                //                 embed
-                //             })
-                //             .collect();
-                //         response.set_embeds(embeds)
-                //     })
-                //     .await?;
+                let prompt_upload =
+                    s3.put_text(format!("{}/prompt.txt", folder), prompt.to_string());
+                let uploads = futures::future::try_join_all(uploads);
+                let (prompt_uri, upload_uris) =
+                    futures::future::try_join(prompt_upload, uploads).await?;
+
+                // let paths = imgs
+                //     .generated_imgs
+                //     .iter()
+                //     .cloned()
+                //     .enumerate()
+                //     .map(|(index, data)| {
+                //         let filename = format!("{}.{}", index, imgs.generated_imgs_format);
+                //         AttachmentType::Bytes {
+                //             data: data.into(),
+                //             filename,
+                //         }
+                //     });
+                // let mut req = serenity::http::request::RequestBuilder::new(
+                //     serenity::http::routing::RouteInfo::EditOriginalInteractionResponse {
+                //         application_id: command.application_id.0,
+                //         interaction_token: &command.token,
+                //     },
+                // );
+                // req.multipart(Some(serenity::http::multipart::Multipart {
+                //     files: paths.into_iter().map(Into::into).collect(),
+                //     payload_json: None,
+                //     fields: vec![],
+                // }))
+                // .body(Some(serenity::json::to));
+                // ctx.http.fire(req.build()).await?;
+                command
+                    .edit_original_interaction_response(&ctx.http, |response| {
+                        let embeds = upload_uris
+                            .into_iter()
+                            .map(|url| {
+                                let mut embed = CreateEmbed::default();
+                                embed.image(url);
+                                embed.url(prompt_uri.clone());
+                                embed
+                            })
+                            .collect();
+                        response.set_embeds(embeds).content(prompt)
+                    })
+                    .await?;
             }
             Err(err) => {
                 command
