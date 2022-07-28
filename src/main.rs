@@ -314,31 +314,8 @@ async fn generate(ctx: &Context, command: ApplicationCommandInteraction) -> eyre
                 let (prompt_uri, upload_uris) =
                     futures::future::try_join(prompt_upload, uploads).await?;
 
-                // let paths = imgs
-                //     .generated_imgs
-                //     .iter()
-                //     .cloned()
-                //     .enumerate()
-                //     .map(|(index, data)| {
-                //         let filename = format!("{}.{}", index, imgs.generated_imgs_format);
-                //         AttachmentType::Bytes {
-                //             data: data.into(),
-                //             filename,
-                //         }
-                //     });
-                // let mut req = serenity::http::request::RequestBuilder::new(
-                //     serenity::http::routing::RouteInfo::EditOriginalInteractionResponse {
-                //         application_id: command.application_id.0,
-                //         interaction_token: &command.token,
-                //     },
-                // );
-                // req.multipart(Some(serenity::http::multipart::Multipart {
-                //     files: paths.into_iter().map(Into::into).collect(),
-                //     payload_json: None,
-                //     fields: vec![],
-                // }))
-                // .body(Some(serenity::json::to));
-                // ctx.http.fire(req.build()).await?;
+                // discord aggregates multiple image embeds if they have the same url
+                // https://www.reddit.com/r/discordapp/comments/raz4kl/finally_a_way_to_display_multiple_images_in_an/
                 command
                     .edit_original_interaction_response(&ctx.http, |response| {
                         let embeds = upload_uris
