@@ -242,7 +242,9 @@ fn get_vote(reaction: &str) -> Option<jeopardy::Vote> {
 
 #[tokio::main]
 async fn main() {
-    dotenv::dotenv().unwrap();
+    if dotenv::dotenv().is_err() {
+        eprintln!("Unable to load .env file!");
+    }
 
     // Login with a bot token from the environment
     let token = std::env::var("BOT_TOKEN").expect("token");
