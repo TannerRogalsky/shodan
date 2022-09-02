@@ -37,5 +37,5 @@ spirits-awaken = { git = "https://github.com/TannerRogalsky/spirits-awaken" }
 
 caith = "4.2"
 
-dalle = { path = "./dalle" }
+stable-diffusion = { path = "./stable-diffusion" }
 do_spaces = { path = "./do_spaces" }

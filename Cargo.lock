@@ -2840,7 +2840,6 @@ name = "spookybot"
 version = "0.1.0"
 dependencies = [
  "caith",
- "dalle",
  "db",
  "do_spaces",
  "dotenv",
@@ -2853,6 +2852,7 @@ dependencies = [
  "serenity",
  "spirits-awaken",
  "spooky-raytracer",
+ "stable-diffusion",
  "tokio",
  "uuid",
 ]
@@ -2867,6 +2867,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tokio",
+ "url",
 ]
 
 [[package]]

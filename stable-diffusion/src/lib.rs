@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 
+#[derive(Debug, Clone)]
 pub struct Client {
     token: String,
     model_version: String,
@@ -16,10 +17,7 @@ impl Client {
         }
     }
 
-    pub async fn new_prediction(
-        &self,
-        prompt: impl AsRef<str>,
-    ) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+    pub async fn new_prediction(&self, prompt: impl AsRef<str>) -> reqwest::Result<Vec<url::Url>> {
         let body = CreatePrediction {
             version: &self.model_version,
             input: CreatePredictionInput {
@@ -48,10 +46,7 @@ impl Client {
         Ok(status.output.unwrap())
     }
 
-    async fn get_prediction(
-        &self,
-        id: impl AsRef<str>,
-    ) -> Result<StatusResponse, Box<dyn std::error::Error>> {
+    async fn get_prediction(&self, id: impl AsRef<str>) -> reqwest::Result<StatusResponse> {
         let resp = self
             .http
             .get(format!(
@@ -119,8 +114,8 @@ enum Status {
 #[derive(Debug, Deserialize)]
 #[allow(unused)]
 struct StatusUrls {
-    get: String,
-    cancel: String,
+    get: url::Url,
+    cancel: url::Url,
 }
 
 #[derive(Debug, Deserialize)]
@@ -145,7 +140,7 @@ struct StatusResponse {
     completed_at: String,
     status: Status,
     input: CreatePredictionInput<'static>,
-    output: Option<Vec<String>>,
+    output: Option<Vec<url::Url>>,
     error: Option<String>,
     metrics: serde_json::Map<String, serde_json::Value>,
     logs: Option<String>,

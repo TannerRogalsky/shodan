@@ -1,10 +1,9 @@
 use crate::jeopardy::Vote;
 use serenity::builder::CreateEmbed;
-use serenity::model::interactions::application_command::{
-    ApplicationCommandInteractionDataOption, ApplicationCommandOptionType,
-};
-use serenity::model::prelude::application_command::{
-    ApplicationCommand, ApplicationCommandInteraction,
+use serenity::model::application::command::{Command as ApplicationCommand, CommandOptionType};
+use serenity::model::application::interaction::{
+    application_command::{ApplicationCommandInteraction, CommandDataOption},
+    Interaction, InteractionResponseType,
 };
 use serenity::model::prelude::*;
 use serenity::prelude::*;
@@ -52,7 +51,7 @@ impl EventHandler for Handler {
                             option
                                 .name("description")
                                 .description("A description of the scene in eisenscript.")
-                                .kind(ApplicationCommandOptionType::String)
+                                .kind(CommandOptionType::String)
                                 .required(true)
                         })
                 })
@@ -64,7 +63,7 @@ impl EventHandler for Handler {
                             option
                                 .name("start")
                                 .description("Start a new game of Hunt The Wumpus")
-                                .kind(ApplicationCommandOptionType::SubCommand)
+                                .kind(CommandOptionType::SubCommand)
                         })
                         .create_option(|option| {
                             option
@@ -72,18 +71,18 @@ impl EventHandler for Handler {
                                 .description(
                                     "Shows the current status of your Hunt The Wumpus game.",
                                 )
-                                .kind(ApplicationCommandOptionType::SubCommand)
+                                .kind(CommandOptionType::SubCommand)
                         })
                         .create_option(|option| {
                             option
                                 .name("move")
                                 .description("Move to a new room.")
-                                .kind(ApplicationCommandOptionType::SubCommand)
+                                .kind(CommandOptionType::SubCommand)
                                 .create_sub_option(|option| {
                                     option
                                         .name("room")
                                         .description("The room to move to.")
-                                        .kind(ApplicationCommandOptionType::Integer)
+                                        .kind(CommandOptionType::Integer)
                                         .max_int_value(19)
                                         .required(true)
                                 })
@@ -92,12 +91,12 @@ impl EventHandler for Handler {
                             option
                                 .name("shoot")
                                 .description("Shoot an arrow into an adjacent room.")
-                                .kind(ApplicationCommandOptionType::SubCommand)
+                                .kind(CommandOptionType::SubCommand)
                                 .create_sub_option(|option| {
                                     option
                                         .name("at_room")
                                         .description("The room to shoot into.")
-                                        .kind(ApplicationCommandOptionType::Integer)
+                                        .kind(CommandOptionType::Integer)
                                         .max_int_value(19)
                                         .required(true)
                                 })
@@ -105,7 +104,7 @@ impl EventHandler for Handler {
                                     option
                                         .name("room_travel")
                                         .description("The number of rooms for the arrow to travel.")
-                                        .kind(ApplicationCommandOptionType::Integer)
+                                        .kind(CommandOptionType::Integer)
                                         .max_int_value(5)
                                         .required(true)
                                 })
@@ -119,7 +118,7 @@ impl EventHandler for Handler {
                             option
                                 .name("generate")
                                 .description("Generate a new character.")
-                                .kind(ApplicationCommandOptionType::SubCommand)
+                                .kind(CommandOptionType::SubCommand)
                         })
                 })
                 .create_application_command(|commands| {
@@ -130,7 +129,7 @@ impl EventHandler for Handler {
                             option
                                 .name("roll")
                                 .description("roll definition")
-                                .kind(ApplicationCommandOptionType::String)
+                                .kind(CommandOptionType::String)
                                 .required(true)
                         })
                 })
@@ -142,7 +141,7 @@ impl EventHandler for Handler {
                             option
                                 .name("prompt")
                                 .description("Some text to feed to the generator.")
-                                .kind(ApplicationCommandOptionType::String)
+                                .kind(CommandOptionType::String)
                                 .required(true)
                         })
                 })
@@ -253,15 +252,9 @@ async fn main() {
     let s3 =
         do_spaces::Client::new(std::env::var("DO_SPACES_SECRET").expect("need DO_SPACES_SECRET"));
 
-    let dalle = if let Ok(url) = std::env::var("DALLE_URL") {
-        let r = dalle::Dalle::new(url).await;
-        if let Err(err) = &r {
-            eprintln!("{}", err);
-        }
-        r.ok()
-    } else {
-        None
-    };
+    let stabdiff_token = std::env::var("STABDIFF_TOKEN").expect("need STABDIFF_TOKEN");
+    let stabdiff_version = std::env::var("STABDIFF_VERSION").expect("need STABDIFF_VERSION");
+    let stabdiff = stable_diffusion::Client::new(stabdiff_token, stabdiff_version);
 
     let db = tokio::task::block_in_place(|| db::DB::new(db::DB::env_url().unwrap())).unwrap();
 
@@ -270,7 +263,7 @@ async fn main() {
         .event_handler(Handler)
         .type_map_insert::<HTWGamesTypeMap>(Default::default())
         .type_map_insert::<db_support::DB>(db)
-        .type_map_insert::<serenity_impls::DalleSupport>(dalle)
+        .type_map_insert::<serenity_impls::StableDiffusionSupport>(stabdiff)
         .type_map_insert::<serenity_impls::DoSpacesSupport>(s3)
         .await
         .expect("Error creating client");
@@ -289,66 +282,39 @@ async fn generate(ctx: &Context, command: ApplicationCommandInteraction) -> eyre
         .and_then(|option| option.value.as_ref())
         .and_then(|option| option.as_str())
         .unwrap();
-    let s3 = get_data::<serenity_impls::DoSpacesSupport, _>(ctx).await;
-    if let Some(dalle) = get_data::<serenity_impls::DalleSupport, _>(ctx).await {
-        command
-            .create_interaction_response(&ctx.http, |response| {
-                response
-                    .kind(InteractionResponseType::DeferredChannelMessageWithSource)
-                    .interaction_response_data(|data| data.content("Generating images."))
-            })
-            .await?;
+    let sd = get_data::<serenity_impls::StableDiffusionSupport, _>(ctx).await;
+    command
+        .create_interaction_response(&ctx.http, |response| {
+            response
+                .kind(InteractionResponseType::DeferredChannelMessageWithSource)
+                .interaction_response_data(|data| data.content("Generating images."))
+        })
+        .await?;
 
-        match dalle.generate(prompt, 4).await {
-            Ok(imgs) => {
-                let folder = format!("dalle/{}", uuid::Uuid::new_v4());
-                let uploads = imgs
-                    .generated_imgs
-                    .into_iter()
-                    .enumerate()
-                    .map(|(index, img)| {
-                        let key = format!("{}/{}.jpeg", folder, index);
-                        s3.put_jpeg(key, img)
-                    });
-                let prompt_upload =
-                    s3.put_text(format!("{}/prompt.txt", folder), prompt.to_string());
-                let uploads = futures::future::try_join_all(uploads);
-                let (prompt_uri, upload_uris) =
-                    futures::future::try_join(prompt_upload, uploads).await?;
-
-                // discord aggregates multiple image embeds if they have the same url
-                // https://www.reddit.com/r/discordapp/comments/raz4kl/finally_a_way_to_display_multiple_images_in_an/
-                command
-                    .edit_original_interaction_response(&ctx.http, |response| {
-                        let embeds = upload_uris
-                            .into_iter()
-                            .map(|url| {
-                                let mut embed = CreateEmbed::default();
-                                embed.image(url);
-                                embed.url(prompt_uri.clone());
-                                embed
-                            })
-                            .collect();
-                        response.set_embeds(embeds).content(prompt)
-                    })
-                    .await?;
-            }
-            Err(err) => {
-                command
-                    .edit_original_interaction_response(&ctx.http, |response| response.content(err))
-                    .await?;
-            }
+    match sd.new_prediction(prompt).await {
+        Ok(imgs) => {
+            // discord aggregates multiple image embeds if they have the same url
+            // https://www.reddit.com/r/discordapp/comments/raz4kl/finally_a_way_to_display_multiple_images_in_an/
+            command
+                .edit_original_interaction_response(&ctx.http, |response| {
+                    let embeds = imgs
+                        .into_iter()
+                        .map(|url| {
+                            let mut embed = CreateEmbed::default();
+                            embed.image(url);
+                            // embed.url(prompt_uri.clone());
+                            embed
+                        })
+                        .collect();
+                    response.set_embeds(embeds).content(prompt)
+                })
+                .await?;
         }
-    } else {
-        command
-            .create_interaction_response(&ctx.http, |response| {
-                response
-                    .kind(InteractionResponseType::ChannelMessageWithSource)
-                    .interaction_response_data(|data| {
-                        data.ephemeral(true).content("Dalle backend not connected.")
-                    })
-            })
-            .await?;
+        Err(err) => {
+            command
+                .edit_original_interaction_response(&ctx.http, |response| response.content(err))
+                .await?;
+        }
     }
 
     Ok(())
@@ -457,7 +423,7 @@ async fn htw(ctx: &Context, command: ApplicationCommandInteraction) -> eyre::Res
                     "shoot" => {
                         fn get_usize(
                             name: &'static str,
-                        ) -> impl FnMut(&ApplicationCommandInteractionDataOption) -> Option<usize>
+                        ) -> impl FnMut(&CommandDataOption) -> Option<usize>
                         {
                             move |option| {
                                 (option.name == name).then(|| {

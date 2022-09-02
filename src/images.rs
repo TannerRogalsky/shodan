@@ -1,6 +1,8 @@
 use glam::vec3a as vec3;
 use raytracer::*;
-use serenity::model::interactions::application_command::ApplicationCommandInteraction;
+use serenity::model::application::interaction::{
+    application_command::ApplicationCommandInteraction, InteractionResponseType,
+};
 use serenity::model::prelude::*;
 use serenity::prelude::*;
 
