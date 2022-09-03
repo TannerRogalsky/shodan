@@ -245,6 +245,14 @@ async fn main() {
         eprintln!("Unable to load .env file!");
     }
 
+    use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+    tracing_subscriber::registry()
+        .with(tracing_subscriber::EnvFilter::new(
+            std::env::var("RUST_LOG").unwrap_or_else(|_| "info".into()),
+        ))
+        .with(tracing_subscriber::fmt::layer())
+        .init();
+
     // Login with a bot token from the environment
     let token = std::env::var("BOT_TOKEN").expect("token");
     assert!(serenity::utils::validate_token(&token).is_ok());

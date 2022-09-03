@@ -101,49 +101,34 @@ struct CreatePrediction<'a> {
     input: CreatePredictionInput<'a>,
 }
 
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "lowercase")]
-enum Status {
-    Starting,
-    Processing,
-    Succeeded,
-    Failed,
-    Canceled,
-}
+// #[derive(Debug, Deserialize)]
+// #[serde(rename_all = "lowercase")]
+// enum Status {
+//     Starting,
+//     Processing,
+//     Succeeded,
+//     Failed,
+//     Canceled,
+// }
+
+// #[derive(Debug, Deserialize)]
+// struct StatusUrls {
+//     get: url::Url,
+//     cancel: url::Url,
+// }
 
 #[derive(Debug, Deserialize)]
-#[allow(unused)]
-struct StatusUrls {
-    get: url::Url,
-    cancel: url::Url,
-}
-
-#[derive(Debug, Deserialize)]
-#[allow(unused)]
-struct StatusResult {
-    id: String,
-    version: String,
-    urls: StatusUrls,
-    created_at: String,
-    completed_at: String,
-    source: String,
-    status: Status,
-}
-
-#[derive(Debug, Deserialize)]
-#[allow(unused)]
 struct StatusResponse {
     id: String,
-    version: String,
-    urls: StatusUrls,
-    created_at: String,
-    completed_at: String,
-    status: Status,
-    input: CreatePredictionInput<'static>,
+    // version: String,
+    // urls: StatusUrls,
+    // created_at: String,
+    // completed_at: String,
+    // status: Status,
     output: Option<Vec<url::Url>>,
-    error: Option<String>,
-    metrics: serde_json::Map<String, serde_json::Value>,
-    logs: Option<String>,
+    // error: Option<String>,
+    // metrics: serde_json::Map<String, serde_json::Value>,
+    // logs: Option<String>,
 }
 
 #[cfg(test)]
@@ -157,5 +142,17 @@ mod tests {
         let version = "a9758cbfbd5f3c2094457d996681af52552901775aa2d6dd0b17fd15df959bef";
         let client = Client::new(token, version);
         let _r = client.new_prediction("multicolor hyperspace").await;
+    }
+
+    #[tokio::test]
+    async fn get() {
+        let token = std::env::var("STABDIFF_TOKEN").unwrap();
+        let version = "a9758cbfbd5f3c2094457d996681af52552901775aa2d6dd0b17fd15df959bef";
+        let client = Client::new(token, version);
+        let r = client
+            .get_prediction("2h2ly2v2mrfh3fukjdwjjobwb4")
+            .await
+            .unwrap();
+        println!("{:#?}", r);
     }
 }

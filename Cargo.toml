@@ -25,6 +25,8 @@ dotenv = "0.15"
 eyre = "0.6"
 uuid = { version = "1", features = ["v4"] }
 futures = "0.3"
+tracing = "0.1.36"
+tracing-subscriber = { version = "0.3.15", features = ["env-filter"] }
 
 db = { path = "./db" }
 
